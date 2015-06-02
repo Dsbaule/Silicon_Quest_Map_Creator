@@ -11,6 +11,7 @@
 #include <allegro5/allegro_ttf.h>
 #include <allegro5/allegro_native_dialog.h>
 #include <stdio.h>
+#include <string.h>
 
 #define WIDTH       800
 #define HEIGHT      600
@@ -212,7 +213,6 @@ void saveMap(ALLEGRO_DISPLAY *displayOriginal)
     //==============================================
     //PROJECT VARIABLES
     //==============================================
-
     FILE *fp;
     ALLEGRO_FILECHOOSER *file;
     ALLEGRO_DISPLAY *display = displayOriginal;
@@ -222,10 +222,11 @@ void saveMap(ALLEGRO_DISPLAY *displayOriginal)
     //==============================================
     int j, i;
 
-    file = al_create_native_file_dialog("", "Choose files", NULL,ALLEGRO_FILECHOOSER_MULTIPLE);
+    file = al_create_native_file_dialog("", "Choose File location and name", "*.txt",ALLEGRO_FILECHOOSER_MULTIPLE);
     al_show_native_file_dialog(display, file);
     const char *mapName = al_get_native_file_dialog_path(file, 0);
 
+    strcat(mapName, ".txt");
     // SAVE MAP TO FILE
     fp = fopen(mapName, "w");
     fprintf(fp, "%d %d\n", numLinhas, numColunas);
