@@ -9,6 +9,7 @@
 #include <allegro5/allegro_primitives.h>
 #include <allegro5/allegro_font.h>
 #include <allegro5/allegro_ttf.h>
+#include <allegro5/allegro_native_dialog.h>
 #include <stdio.h>
 
 #define WIDTH       800
@@ -206,26 +207,24 @@ void readInputs()
 
 }
 
-void saveMap()
+void saveMap(ALLEGRO_DISPLAY *displayOriginal)
 {
     //==============================================
     //PROJECT VARIABLES
     //==============================================
+
     FILE *fp;
-    char mapName[100];
+    ALLEGRO_FILECHOOSER *file;
+    ALLEGRO_DISPLAY *display = displayOriginal;
 
     //==============================================
     //AUXILIAR VARIABLES
     //==============================================
     int j, i;
 
-    while((!keys[ENTER]) ^ done ){
-        al_draw_textf(font18, al_map_rgb(COR_BORDAS), 100, 100, 0, "NOME DO ARQUIVO: %s", mapName);
-        getc()
-
-        al_flip_display();
-        al_clear_to_color(al_map_rgb(0,0,0));
-    }
+    file = al_create_native_file_dialog("", "Choose files", NULL,ALLEGRO_FILECHOOSER_MULTIPLE);
+    al_show_native_file_dialog(display, file);
+    const char *mapName = al_get_native_file_dialog_path(file, 0);
 
     // SAVE MAP TO FILE
     fp = fopen(mapName, "w");
@@ -275,7 +274,7 @@ int main(void)
     if(!al_init())										//initialize Allegro
         return -1;
     if(FULLSCREEN)
-        al_set_new_display_flags(ALLEGRO_FULLSCREEN);
+    al_set_new_display_flags(ALLEGRO_FULLSCREEN);
     display = al_create_display(WIDTH, HEIGHT);			//create our display object
     if(!display)										//test display object
         return -1;
@@ -312,7 +311,7 @@ int main(void)
         al_hide_mouse_cursor(display);
 
     // MENU
-    while(menu ^ done)
+    while(menu && !done)
     {
         al_wait_for_event(event_queue, &ev);
         readInputs();
@@ -350,7 +349,7 @@ int main(void)
     }
 
     // NUM COLUNAS E LINHAS
-    while(pause ^ done){
+    while(pause && !done){
         al_wait_for_event(event_queue, &ev);
         readInputs();
 
@@ -398,8 +397,6 @@ int main(void)
         // INPUT + OUTPUT
         //==============================================
         readInputs();
-        if(save)
-            saveMap("MAP.txt");
 
         //==============================================
         //GAME UPDATE
@@ -422,7 +419,7 @@ int main(void)
         if(keys[P])
             pause = true;
 
-        while(pause ^ done){
+        while(pause && !done){
             al_wait_for_event(event_queue, &ev);
             readInputs();
 
@@ -460,7 +457,7 @@ int main(void)
                 if(selectedOption == 0)
                     pause = false;
                 else if(selectedOption == 1){
-                    saveMap();
+                    saveMap(display);
                     pause = false;
                 }else
                     done = true;
