@@ -13,6 +13,11 @@
 #include <stdio.h>
 #include <string.h>
 
+// KEYS: (To add one increment key number and add it to the end of USED_KEYS and KEY_PRESS, following the pattern)
+#define KEY_NUMBER  22
+#define USED_KEYS   UP, DOWN, LEFT, RIGHT, W, A, S, D, N0, N1, N2, N3, N4, N5, N6, N7, N8, N9, BACKSPACE, SPACE, ENTER, P
+#define KEY_PRESS   keys[UP]|keys[DOWN]|keys[LEFT]|keys[RIGHT]|keys[W]|keys[A]|keys[S]|keys[D]|keys[N0]|keys[N1]|keys[N2]|keys[N3]|keys[N4]|keys[N5]|keys[N6]|keys[N7]|keys[N8]|keys[N9]|keys[BACKSPACE]|keys[SPACE]|keys[ENTER]|keys[P]
+
 #define WIDTH       800
 #define HEIGHT      600
 #define FULLSCREEN  0
@@ -36,29 +41,34 @@
 //==============================================
 //GLOBALS
 //==============================================
+// Allegro Variables
 ALLEGRO_EVENT ev;
-bool keys[50] = {false};
-enum KEYS {UP, DOWN, LEFT, RIGHT, W, A, S, D, N0, N1, N2, N3, N4, N5, N6, N7, N8, N9, BACKSPACE, SPACE, ENTER, P};
-bool done = false;
-bool draw = true;
-bool save = false;
+ALLEGRO_EVENT_QUEUE *event_queue = NULL;
 
-int numColunas = 1;
-int numLinhas = 1;
-
-char blocos[MAX_LINHAS][MAX_COLUNAS] = {{0}};
-const int blockHeight = 50;
-const int blockWidth = 50;
-int pos_blocos_x = 0;
-int pos_blocos_y = 0;
-char selectedBlock = 1;
-
+// INPUT VARIABLES
+bool keys[KEY_NUMBER] = {false};
+enum KEYS {USED_KEYS};
 int pos_mouse_x = WIDTH / 2;
 int pos_mouse_y = HEIGHT / 2;
 int coluna_Mouse = 0;
 int linha_Mouse = 0;
 int mouseWheelNow = 0;
 int mouseWheelBefore = 0;
+
+// Code state variables
+bool done = false;
+bool draw = true;
+bool save = false;
+
+// Drawing variables
+char blocos[MAX_LINHAS][MAX_COLUNAS] = {{0}};
+const int blockHeight = 50;
+const int blockWidth = 50;
+int numColunas = 1;
+int numLinhas = 1;
+int pos_blocos_x = 0;
+int pos_blocos_y = 0;
+char selectedBlock = 1;
 
 void readInputs()
 {
@@ -295,17 +305,9 @@ void readInputs()
 }
 
 void waitForKeyRelease(){
-    bool aux = false;
-    int i;
-
-    while(1){
+    while(KEY_PRESS){
+        al_wait_for_event(event_queue, &ev);
         readInputs();
-        for(i = 0; i < 50; i++)
-            aux = aux | keys[i];
-        if(!aux)
-            break;
-
-        aux = false;
     }
 }
 
@@ -367,7 +369,6 @@ int main(void)
     //ALLEGRO VARIABLES
     //==============================================
     ALLEGRO_DISPLAY *display = NULL;
-    ALLEGRO_EVENT_QUEUE *event_queue = NULL;
     ALLEGRO_TIMER *timer;
     ALLEGRO_FONT *font18;
 
@@ -434,16 +435,12 @@ int main(void)
         al_flip_display();
         al_clear_to_color(al_map_rgb(0,0,0));
 
-        while(keys[UP] | keys[DOWN] | keys[W] | keys[S]){
-            al_wait_for_event(event_queue, &ev);
-            readInputs();
-        }
-
         if(keys[ENTER]){
             done = selectedOption;
             selectedOption = 0;
             break;
         }
+        waitForKeyRelease();
     }
 
     while(keys[ENTER]){
@@ -471,89 +468,78 @@ int main(void)
             al_draw_textf(font18, al_map_rgb(COR_BORDAS), 100, 125, 0, ">                                   <");
         }
 
-        if(selectedOption){
-            if(keys[BACKSPACE])
-                numColunas = (numColunas/10);
-            else if((keys[A] || keys[LEFT]) && (numColunas>1))
-                numColunas--;
-            else if((keys[D] | keys[RIGHT]) && (numColunas < MAX_COLUNAS))
-                numColunas++;
-            else if(keys[N0])
-                numColunas = (numColunas * 10) + 0;
-            else if(keys[N1])
-                numColunas = (numColunas * 10) + 1;
-            else if(keys[N2])
-                numColunas = (numColunas * 10) + 2;
-            else if(keys[N3])
-                numColunas = (numColunas * 10) + 3;
-            else if(keys[N4])
-                numColunas = (numColunas * 10) + 4;
-            else if(keys[N5])
-                numColunas = (numColunas * 10) + 5;
-            else if(keys[N6])
-                numColunas = (numColunas * 10) + 6;
-            else if(keys[N7])
-                numColunas = (numColunas * 10) + 7;
-            else if(keys[N8])
-                numColunas = (numColunas * 10) + 8;
-            else if(keys[N9])
-                numColunas = (numColunas * 10) + 9;
-            if(numColunas > MAX_COLUNAS)
-                numColunas = MAX_COLUNAS;
+        if(KEY_PRESS){
+            if(selectedOption){
+                if(keys[BACKSPACE])
+                    numColunas = (numColunas/10);
+                else if((keys[A] || keys[LEFT]) && (numColunas>1))
+                    numColunas--;
+                else if((keys[D] | keys[RIGHT]) && (numColunas < MAX_COLUNAS))
+                    numColunas++;
+                else if(keys[N0])
+                    numColunas = (numColunas * 10) + 0;
+                else if(keys[N1])
+                    numColunas = (numColunas * 10) + 1;
+                else if(keys[N2])
+                    numColunas = (numColunas * 10) + 2;
+                else if(keys[N3])
+                    numColunas = (numColunas * 10) + 3;
+                else if(keys[N4])
+                    numColunas = (numColunas * 10) + 4;
+                else if(keys[N5])
+                    numColunas = (numColunas * 10) + 5;
+                else if(keys[N6])
+                    numColunas = (numColunas * 10) + 6;
+                else if(keys[N7])
+                    numColunas = (numColunas * 10) + 7;
+                else if(keys[N8])
+                    numColunas = (numColunas * 10) + 8;
+                else if(keys[N9])
+                    numColunas = (numColunas * 10) + 9;
+                if(numColunas > MAX_COLUNAS)
+                    numColunas = MAX_COLUNAS;
+            }else{
+                if(keys[BACKSPACE])
+                    numLinhas = (numLinhas/10);
+                if((keys[A] | keys[LEFT]) && (numLinhas > 1))
+                    numLinhas--;
+                if((keys[D] | keys[RIGHT]) && (numLinhas < MAX_LINHAS))
+                    numLinhas++;
+                else if(keys[N0])
+                    numLinhas = (numLinhas * 10) + 0;
+                else if(keys[N1])
+                    numLinhas = (numLinhas * 10) + 1;
+                else if(keys[N2])
+                    numLinhas = (numLinhas * 10) + 2;
+                else if(keys[N3])
+                    numLinhas = (numLinhas * 10) + 3;
+                else if(keys[N4])
+                    numLinhas = (numLinhas * 10) + 4;
+                else if(keys[N5])
+                    numLinhas = (numLinhas * 10) + 5;
+                else if(keys[N6])
+                    numLinhas = (numLinhas * 10) + 6;
+                else if(keys[N7])
+                    numLinhas = (numLinhas * 10) + 7;
+                else if(keys[N8])
+                    numLinhas = (numLinhas * 10) + 8;
+                else if(keys[N9])
+                    numLinhas = (numLinhas * 10) + 9;
+                if(numLinhas > MAX_LINHAS)
+                    numLinhas = MAX_LINHAS;
+            }
+            if(keys[UP] | keys[DOWN] | keys[W] | keys[S])
+                selectedOption = !selectedOption;
 
-        }else{
-            if(keys[BACKSPACE])
-                numLinhas = (numLinhas/10);
-            if((keys[A] | keys[LEFT]) && (numLinhas > 1))
-                numLinhas--;
-            if((keys[D] | keys[RIGHT]) && (numLinhas < MAX_LINHAS))
-                numLinhas++;
-            else if(keys[N0])
-                numLinhas = (numLinhas * 10) + 0;
-            else if(keys[N1])
-                numLinhas = (numLinhas * 10) + 1;
-            else if(keys[N2])
-                numLinhas = (numLinhas * 10) + 2;
-            else if(keys[N3])
-                numLinhas = (numLinhas * 10) + 3;
-            else if(keys[N4])
-                numLinhas = (numLinhas * 10) + 4;
-            else if(keys[N5])
-                numLinhas = (numLinhas * 10) + 5;
-            else if(keys[N6])
-                numLinhas = (numLinhas * 10) + 6;
-            else if(keys[N7])
-                numLinhas = (numLinhas * 10) + 7;
-            else if(keys[N8])
-                numLinhas = (numLinhas * 10) + 8;
-            else if(keys[N9])
-                numLinhas = (numLinhas * 10) + 9;
-            if(numLinhas > MAX_LINHAS)
-                numLinhas = MAX_LINHAS;
+            if(keys[ENTER]){
+                pause = false;
+                break;
+            }
+
+            waitForKeyRelease();
         }
-
-
-
-
-        if(keys[UP] | keys[DOWN] | keys[W] | keys[S])
-            selectedOption = !selectedOption;
-
         al_flip_display();
         al_clear_to_color(al_map_rgb(0,0,0));
-
-        //waitForKeyRelease();
-
-
-        while(keys[UP] | keys[DOWN] | keys[W] | keys[S] | keys[A] | keys[D] | keys[LEFT] | keys[RIGHT] | keys[N0] | keys[N1]
-               | keys[N2] | keys[N3] | keys[N4] | keys[N5] | keys[N6] | keys[N7] | keys[N8] | keys[N9] | keys[BACKSPACE]){
-            al_wait_for_event(event_queue, &ev);
-            readInputs();
-        }
-
-        if(keys[ENTER]){
-            pause = false;
-            break;
-        }
     }
 
     // GAME
@@ -584,13 +570,11 @@ int main(void)
             //=====================
         }
 
-        if(keys[P])
+        if(keys[P]){
             pause = true;
-
-        while(pause && !done){
-            al_wait_for_event(event_queue, &ev);
-            readInputs();
-
+            waitForKeyRelease();
+        }
+        while(pause && (!done)){
             al_draw_textf(font18, al_map_rgb(COR_BORDAS), 100, 100, 0, "        CONTINUE");
             al_draw_textf(font18, al_map_rgb(COR_BORDAS), 100, 125, 0, "        SAVE MAP");
             al_draw_textf(font18, al_map_rgb(COR_BORDAS), 100, 150, 0, "        QUIT  ");
@@ -602,6 +586,10 @@ int main(void)
             }else{
                 al_draw_textf(font18, al_map_rgb(COR_BORDAS), 100, 150, 0, ">                           <");
             }
+            al_wait_for_event(event_queue, &ev);
+            readInputs();
+            al_flip_display();
+            al_clear_to_color(al_map_rgb(0,0,0));
 
             if(keys[UP] | keys[W])
                 selectedOption--;
@@ -613,15 +601,8 @@ int main(void)
             else if(selectedOption < 0)
                 selectedOption = 2;
 
-            al_flip_display();
-            al_clear_to_color(al_map_rgb(0,0,0));
-
-            while(keys[UP] | keys[DOWN] | keys[W] | keys[S]){
-                al_wait_for_event(event_queue, &ev);
-                readInputs();
-            }
-
             if(keys[ENTER]){
+                waitForKeyRelease();
                 if(selectedOption == 0)
                     pause = false;
                 else if(selectedOption == 1){
@@ -632,6 +613,7 @@ int main(void)
                 selectedOption = 0;
                 break;
             }
+            waitForKeyRelease();
         }
 
         //==============================================
