@@ -1,24 +1,25 @@
 //--------------------------------------------------
 // Inclusão das bibliotecas do Allegro 5
 //--------------------------------------------------
-#include <allegro5/allegro.h>   //Biblioteca padrão allegro
-#include <allegro5/allegro_font.h>  //Biblioteca para utilização de fontes
-#include <allegro5/allegro_ttf.h>   //Biblioteca para utilização de fontes
-#include <allegro5/allegro_primitives.h>    //Biblioteca para utilização de primitivos
+#include <allegro5/allegro.h>   // Biblioteca padrão allegro
+#include <allegro5/allegro_font.h>  // Biblioteca para utilização de fontes
+#include <allegro5/allegro_ttf.h>   // Biblioteca para utilização de fontes
+#include <allegro5/allegro_primitives.h>    // Biblioteca para utilização de primitivos
+#include <allegro5/allegro_image.h>         // Biblioteca para utilização de bitmaps
 #include <allegro5/allegro_native_dialog.h> // Biblioteca para utilização de caixas de texto do SO
 
 //--------------------------------------------------
 // Inclusão das bibliotecas padrões C
 //--------------------------------------------------
-#include <stdio.h>
-#include <string.h>
+#include <stdio.h>      // Biblioteca utilizada para escrita em arquivo
+#include <string.h>     // Biblioteca para a manipulação de Strings
 
 //--------------------------------------------------
 // Definição dos valores para o compilador
 //--------------------------------------------------
 
 // Definições da tela
-#define FULLSCREEN      1
+#define FULLSCREEN      0
 #define DISPLAY_WIDTH   1600
 #define DISPLAY_HEIGHT  900
 
@@ -148,6 +149,7 @@ int main()
     al_init_font_addon();
     al_init_ttf_addon();
     al_init_primitives_addon();
+    al_init_image_addon();
     al_install_keyboard();
     al_install_mouse();
 
@@ -197,6 +199,21 @@ int main()
     //--------------------------------------------------
     // Definição das variaveis gerais
     //--------------------------------------------------
+    ALLEGRO_BITMAP *blocoTerra = NULL;
+    ALLEGRO_BITMAP *blocoGrama = NULL;
+    ALLEGRO_BITMAP *blocoPedra = NULL;
+    ALLEGRO_BITMAP *blocoSilicio = NULL;
+    ALLEGRO_BITMAP *blocoLava = NULL;
+    ALLEGRO_BITMAP *blocoAgua = NULL;
+
+    blocoTerra = al_load_bitmap("Bitmaps/Terra.bmp");
+    blocoGrama = al_load_bitmap("Bitmaps/Grama.bmp");
+    blocoPedra = al_load_bitmap("Bitmaps/Pedra.bmp");
+    blocoSilicio = al_load_bitmap("Bitmaps/Silicio.bmp");
+    blocoLava = al_load_bitmap("Bitmaps/Lava.bmp");
+    blocoAgua = al_load_bitmap("Bitmaps/Agua.bmp");
+
+    struct Posicao source = {al_get_bitmap_width(blocoTerra), al_get_bitmap_height(blocoTerra), 0};
 
     //--------------------------------------------------
     // Definição das variaveis auxiliares
@@ -361,15 +378,13 @@ int main()
 
                 if(keys[ENTER])
                 {
+                    mapa.x = ((DISPLAY_WIDTH/2) - ((numColunas/2) * blockWidth));
+                    mapa.y = ((DISPLAY_HEIGHT/2) - ((numLinhas/2) * blockHeight));
                     gameState = 2;
                 }
             }
 
         }
-
-
-        mapa.x = ((DISPLAY_WIDTH/2) - ((numColunas/2) * blockWidth));
-        mapa.y = ((DISPLAY_HEIGHT/2) - ((numLinhas/2) * blockHeight));
 
         if(gameState == 2)
         {
@@ -393,12 +408,6 @@ int main()
                 mouse.x = mapa.x + (numColunas * blockWidth) - 1;
             if(mouse.y >= (mapa.y + (numLinhas * blockHeight)))
                 mouse.y = mapa.y + (numLinhas * blockHeight) - 1;
-            /*
-            if(((mouse.x - mapa.x) / blockWidth) < numColunas)
-                mouseBlock.coluna = (mouse.x - mapa.x) / blockWidth;
-            if(((mouse.y - mapa.y) / blockHeight) < numLinhas)
-                mouseBlock.linha = (mouse.y - mapa.y) / blockHeight;
-            */
 
             mouseBlock.coluna = (mouse.x - mapa.x)/blockWidth;
             mouseBlock.linha = (mouse.y - mapa.y)/blockHeight;
@@ -427,25 +436,18 @@ int main()
             if(movement)
             {
                 // READ MOVEMENT KEYS (WASD + ARROWS)
-                if((keys[LEFT] || keys[A]) && (mapa.x <= 0))
+                if((keys[LEFT] || keys[A]) && (mapa.x < 0))
                     mapa.x += MOVEMENT_STEP + (2 * keys[SHIFT]);
-                if((keys[RIGHT] || keys[D]) && ((mapa.x + (numColunas * blockWidth) >= DISPLAY_WIDTH)))
+                if((keys[RIGHT] || keys[D]) && (((mapa.x + (numColunas * blockWidth)) > DISPLAY_WIDTH)))
                     mapa.x -= MOVEMENT_STEP + (2 * keys[SHIFT]);
 
-                if((keys[UP] || keys[W]) && (mapa.y <= 0))
+                if((keys[UP] || keys[W]) && (mapa.y < 0))
                     mapa.y += MOVEMENT_STEP + (2 * keys[SHIFT]);
-                if((keys[DOWN] || keys[S]) && ((mapa.y + (numLinhas * blockHeight) >= DISPLAY_HEIGHT)))
+                if((keys[DOWN] || keys[S]) && (((mapa.y + (numLinhas * blockHeight)) > DISPLAY_HEIGHT)))
                     mapa.y -= MOVEMENT_STEP + (2 * keys[SHIFT]);
-                /*
-                if(!(mapa.x >= 0))
-                    mapa.x += (keys[LEFT] | keys[A]) * (1 + 2 * keys[SHIFT]);
-                if(!(mapa.y >= 0))
-                    mapa.y += (keys[UP] | keys[W]) * (1 + 2 * keys[SHIFT]);
-                if(!(mapa.x <= ((-numColunas * blockWidth) + DISPLAY_WIDTH)))
-                    mapa.x -= (keys[RIGHT] | keys[D]) * (1 + 2 * keys[SHIFT]);
-                if(!(mapa.y <= ((-numLinhas * blockHeight) + DISPLAY_HEIGHT)))
-                    mapa.y -= (keys[DOWN] | keys[S]) * (1 + 2 * keys[SHIFT]);
-                    */
+
+                if(keys[UP])
+                    mapa.y += 10;
 
                 movement = false;
             }
@@ -466,19 +468,22 @@ int main()
                                 al_draw_filled_rectangle(mapa.x + j * blockWidth, mapa.y + i * blockHeight, mapa.x + (j * blockWidth) + blockWidth, mapa.y + (i * blockHeight) + blockHeight, al_map_rgb(COR_AR));
                                 break;
                             case 1: // TERRA
-                                al_draw_filled_rectangle(mapa.x + j * blockWidth, mapa.y + i * blockHeight, mapa.x + (j * blockWidth) + blockWidth, mapa.y + (i * blockHeight) + blockHeight, al_map_rgb(COR_TERRA));
+                                if(blocos[i-1][j] == 0)
+                                    al_draw_scaled_bitmap(blocoGrama, 0, 0, source.x, source.y, mapa.x + j * blockWidth, mapa.y + i * blockHeight, blockWidth, blockHeight, 0);
+                                else
+                                    al_draw_scaled_bitmap(blocoTerra, 0, 0, source.x, source.y, mapa.x + j * blockWidth, mapa.y + i * blockHeight, blockWidth, blockHeight, 0);
                                 break;
                             case 2: // PEDRA
-                                al_draw_filled_rectangle(mapa.x + j * blockWidth, mapa.y + i * blockHeight, mapa.x + (j * blockWidth) + blockWidth, mapa.y + (i * blockHeight) + blockHeight, al_map_rgb(COR_PEDRA));
+                                al_draw_scaled_bitmap(blocoPedra, 0, 0, source.x, source.y, mapa.x + j * blockWidth, mapa.y + i * blockHeight, blockWidth, blockHeight, 0);
                                 break;
                             case 3: // SILICIO
-                                al_draw_filled_rectangle(mapa.x + j * blockWidth, mapa.y + i * blockHeight, mapa.x + (j * blockWidth) + blockWidth, mapa.y + (i * blockHeight) + blockHeight, al_map_rgb(COR_SILICIO));
+                                al_draw_scaled_bitmap(blocoSilicio, 0, 0, source.x, source.y, mapa.x + j * blockWidth, mapa.y + i * blockHeight, blockWidth, blockHeight, 0);
                                 break;
-                            case 4: // PEDRA INQUEBRAVEL
-                                al_draw_filled_rectangle(mapa.x + j * blockWidth, mapa.y + i * blockHeight, mapa.x + (j * blockWidth) + blockWidth, mapa.y + (i * blockHeight) + blockHeight, al_map_rgb(COR_LAVA));
+                            case 4: // LAVA
+                                al_draw_scaled_bitmap(blocoLava, 0, 0, source.x, source.y, mapa.x + j * blockWidth, mapa.y + i * blockHeight, blockWidth, blockHeight, 0);
                                 break;
-                            case 5: // PEDRA INQUEBRAVEL
-                                al_draw_filled_rectangle(mapa.x + j * blockWidth, mapa.y + i * blockHeight, mapa.x + (j * blockWidth) + blockWidth, mapa.y + (i * blockHeight) + blockHeight, al_map_rgb(COR_AGUA));
+                            case 5: // AGUA
+                                al_draw_scaled_bitmap(blocoAgua, 0, 0, source.x, source.y, mapa.x + j * blockWidth, mapa.y + i * blockHeight, blockWidth, blockHeight, 0);
                                 break;
                             }
                         }
@@ -497,19 +502,22 @@ int main()
                 switch(selectedBlock)
                 {
                 case 1: // TERRA
-                    al_draw_filled_rectangle(DISPLAY_WIDTH - (10 + blockWidth), 10, DISPLAY_WIDTH - 10, 10 + blockHeight, al_map_rgb(COR_TERRA));
+                    if(blocos[i-1][j] == 0)
+                        al_draw_scaled_bitmap(blocoGrama, 0, 0, source.x, source.y, DISPLAY_WIDTH - (10 + blockWidth), 10, blockWidth, blockHeight, 0);
+                    else
+                        al_draw_scaled_bitmap(blocoTerra, 0, 0, source.x, source.y, DISPLAY_WIDTH - (10 + blockWidth), 10, blockWidth, blockHeight, 0);
                     break;
                 case 2: // PEDRA
-                    al_draw_filled_rectangle(DISPLAY_WIDTH - (10 + blockWidth), 10, DISPLAY_WIDTH - 10, 10 + blockHeight, al_map_rgb(COR_PEDRA));
+                    al_draw_scaled_bitmap(blocoPedra, 0, 0, source.x, source.y, DISPLAY_WIDTH - (10 + blockWidth), 10, blockWidth, blockHeight, 0);
                     break;
                 case 3: // SILICIO
-                    al_draw_filled_rectangle(DISPLAY_WIDTH - (10 + blockWidth), 10, DISPLAY_WIDTH - 10, 10 + blockHeight, al_map_rgb(COR_SILICIO));
+                    al_draw_scaled_bitmap(blocoSilicio, 0, 0, source.x, source.y, DISPLAY_WIDTH - (10 + blockWidth), 10, blockWidth, blockHeight, 0);
                     break;
                 case 4: // LAVA
-                    al_draw_filled_rectangle(DISPLAY_WIDTH - (10 + blockWidth), 10, DISPLAY_WIDTH - 10, 10 + blockHeight, al_map_rgb(COR_LAVA));
+                    al_draw_scaled_bitmap(blocoLava, 0, 0, source.x, source.y, DISPLAY_WIDTH - (10 + blockWidth), 10, blockWidth, blockHeight, 0);
                     break;
                 case 5: // AGUA
-                    al_draw_filled_rectangle(DISPLAY_WIDTH - (10 + blockWidth), 10, DISPLAY_WIDTH - 10, 10 + blockHeight, al_map_rgb(COR_AGUA));
+                    al_draw_scaled_bitmap(blocoAgua, 0, 0, source.x, source.y, DISPLAY_WIDTH - (10 + blockWidth), 10, blockWidth, blockHeight, 0);
                     break;
                 }
 
@@ -588,6 +596,13 @@ int main()
     // Finalização do Allegro
     //--------------------------------------------------
 
+    al_destroy_bitmap(blocoTerra);
+    al_destroy_bitmap(blocoGrama);
+    al_destroy_bitmap(blocoPedra);
+    al_destroy_bitmap(blocoSilicio);
+    al_destroy_bitmap(blocoLava);
+    al_destroy_bitmap(blocoAgua);
+
     al_destroy_event_queue(event_queue);
     al_destroy_timer(drawTimer);
     al_destroy_timer(movementTimer);
@@ -610,13 +625,9 @@ int checkEvents()
         break;
     case ALLEGRO_EVENT_TIMER:
         if(ev.timer.source == drawTimer)
-        {
             draw = true;
-        }
         else if(ev.timer.source == movementTimer)
-        {
             movement = true;
-        }
         else if(ev.timer.source == menuTimer)
         {
             al_stop_timer(menuTimer);
