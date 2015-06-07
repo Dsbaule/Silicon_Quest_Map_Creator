@@ -1,10 +1,9 @@
 # depslib dependency file v1.0
-1433340672 source:c:\users\dsbau_000\skydrive\documents\programação\github\silicon_quest_map_creator\silicon_quest_map_creator\main.c
+1433652470 source:c:\users\dsbau_000\skydrive\documents\programação\github\silicon_quest_map_creator\silicon_quest_map_creator\main.c
 	<allegro5/allegro.h>
-	<allegro5/allegro_image.h>
-	<allegro5/allegro_primitives.h>
 	<allegro5/allegro_font.h>
 	<allegro5/allegro_ttf.h>
+	<allegro5/allegro_primitives.h>
 	<allegro5/allegro_native_dialog.h>
 	<stdio.h>
 	<string.h>
@@ -248,4 +247,6 @@
 
 1433124983 c:\codeblocks\mingw\allegro5\include\allegro5\allegro_native_dialog.h
 	"allegro5/allegro.h"
+
+1433637760 c:\users\dsbau_000\skydrive\documents\programação\github\silicon_quest_map_creator\silicon_quest_map_creator\readinputs.h
 

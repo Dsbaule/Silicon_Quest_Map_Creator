@@ -1,36 +1,43 @@
-/*
-    Projeto: Silicon Quest Map Creator
-    Alunos: Daniel de Souza Baulé
-            Stefano Bergamini Poletto
-*/
+//--------------------------------------------------
+// Inclusão das bibliotecas do Allegro 5
+//--------------------------------------------------
+#include <allegro5/allegro.h>   //Biblioteca padrão allegro
+#include <allegro5/allegro_font.h>  //Biblioteca para utilização de fontes
+#include <allegro5/allegro_ttf.h>   //Biblioteca para utilização de fontes
+#include <allegro5/allegro_primitives.h>    //Biblioteca para utilização de primitivos
+#include <allegro5/allegro_native_dialog.h> // Biblioteca para utilização de caixas de texto do SO
 
-#include <allegro5/allegro.h>
-#include <allegro5/allegro_image.h>
-#include <allegro5/allegro_primitives.h>
-#include <allegro5/allegro_font.h>
-#include <allegro5/allegro_ttf.h>
-#include <allegro5/allegro_native_dialog.h>
+//--------------------------------------------------
+// Inclusão das bibliotecas padrões C
+//--------------------------------------------------
 #include <stdio.h>
 #include <string.h>
 
-// KEYS: (To add one increment key number and add it to the end of USED_KEYS and KEY_PRESS, following the pattern)
-#define KEY_NUMBER  22
-#define USED_KEYS   UP, DOWN, LEFT, RIGHT, W, A, S, D, N0, N1, N2, N3, N4, N5, N6, N7, N8, N9, BACKSPACE, SPACE, ENTER, P
-#define KEY_PRESS   keys[UP]|keys[DOWN]|keys[LEFT]|keys[RIGHT]|keys[W]|keys[A]|keys[S]|keys[D]|keys[N0]|keys[N1]|keys[N2]|keys[N3]|keys[N4]|keys[N5]|keys[N6]|keys[N7]|keys[N8]|keys[N9]|keys[BACKSPACE]|keys[SPACE]|keys[ENTER]|keys[P]
+//--------------------------------------------------
+// Definição dos valores para o compilador
+//--------------------------------------------------
 
-#define WIDTH       800
-#define HEIGHT      600
-#define FULLSCREEN  0
-#define FPS         60
+// Definições da tela
+#define FULLSCREEN  1
+#define DISPLAY_WIDTH   1600
+#define DISPLAY_HEIGHT  900
+
+// Definições dos Timers
+#define FPS             60
+#define MOVEMENT_SPEED  300
+#define MENU_SPEED      7
+
+// Definições de desenho
 #define SHOWMOUSE   1
 #define SHOW_BORDER 1
-#define COR_BORDAS  242, 210, 99
 
-#define MAX_COLUNAS 999
-#define MAX_LINHAS  999
-
+// Definições do mapa
+#define MAX_COLUNAS 2500
+#define MAX_LINHAS  2500
 #define NUM_BLOCOS  6
 
+// Definições das cores
+#define COR_BORDAS  242, 210, 99
 #define COR_AR      0, 0, 0
 #define COR_TERRA   94, 28, 13
 #define COR_PEDRA   53, 53, 53
@@ -38,287 +45,994 @@
 #define COR_LAVA    255, 116, 21
 #define COR_AGUA    0, 128, 255
 
-//==============================================
-//GLOBALS
-//==============================================
-// Allegro Variables
-ALLEGRO_EVENT ev;
+//--------------------------------------------------
+// Definição das variaveis globais para o Allegro
+//--------------------------------------------------
+ALLEGRO_TIMER *drawTimer = NULL;
+ALLEGRO_TIMER *movementTimer = NULL;
+ALLEGRO_TIMER *menuTimer = NULL;
+
 ALLEGRO_EVENT_QUEUE *event_queue = NULL;
+ALLEGRO_EVENT ev;
 
-// INPUT VARIABLES
-bool keys[KEY_NUMBER] = {false};
-enum KEYS {USED_KEYS};
-int pos_mouse_x = WIDTH / 2;
-int pos_mouse_y = HEIGHT / 2;
-int coluna_Mouse = 0;
-int linha_Mouse = 0;
-int mouseWheelNow = 0;
-int mouseWheelBefore = 0;
+ALLEGRO_DISPLAY *display = NULL;
 
-// Code state variables
-bool done = false;
-bool draw = true;
-bool save = false;
-
-// Drawing variables
-char blocos[MAX_LINHAS][MAX_COLUNAS] = {{0}};
+//--------------------------------------------------
+// Definição das variaveis constantes globais
+//--------------------------------------------------
 const int blockHeight = 50;
 const int blockWidth = 50;
-int numColunas = 1;
-int numLinhas = 1;
-int pos_blocos_x = 0;
-int pos_blocos_y = 0;
-char selectedBlock = 1;
+
+//--------------------------------------------------
+// Definição das structs globais
+//--------------------------------------------------
+struct Objeto
+{
+    int     x;
+    int     y;
+    float   force;
+    bool    jump;
+};
+
+struct Posicao
+{
+    int     x;
+    int     y;
+    int     z;
+};
+
+struct matriz
+{
+    int     coluna;
+    int     linha;
+};
+
+//--------------------------------------------------
+// Definição das variaveis para INPUT
+//--------------------------------------------------
+bool keys[62] = {false};
+enum keys {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
+           N0, N1, N2, N3, N4, N5, N6, N7, N8, N9,
+           F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12,
+           UP, DOWN, RIGHT, LEFT, TAB, SHIFT, CTRL, ALT, ENTER, BACKSPACE, SPACE, ESC, MOUSE_1, MOUSE_2
+          };
+
+struct Posicao mouse = {0, 0, 0};
+int mouseWheelBefore = 0;
+
+//--------------------------------------------------
+// Definição das variaveis de estado
+//--------------------------------------------------
+bool done = false;
+bool draw = false;
+bool movement = false;
+bool readMenu = false;
+
+//--------------------------------------------------
+// Definição das variaveis gerais globais
+//--------------------------------------------------
+char blocos[MAX_LINHAS][MAX_COLUNAS] = {{0}};
+struct matriz mouseBlock = {0};
+struct Posicao mapa = {0};
+
+int numColunas = 150;
+int numLinhas = 150;
+
+int selectedBlock = 1;
+
+//--------------------------------------------------
+// Definição das funções utilizadas
+//--------------------------------------------------
+int checkEvents();
+void readInputs();
+void saveMap();
+
+int main()
+{
+    //--------------------------------------------------
+    // Setup do Allegro
+    //--------------------------------------------------
+
+    // Inicialização do allegro
+    if(!al_init())
+    {
+        al_show_native_message_box(NULL, "ERRO", "Incapaz de inicializar o Allegro", NULL, NULL, ALLEGRO_MESSAGEBOX_ERROR);
+        return -1;
+    }
+
+    // Inicialização dos módulos adicionados
+    al_init_font_addon();
+    al_init_ttf_addon();
+    al_init_primitives_addon();
+    al_install_keyboard();
+    al_install_mouse();
+
+    // Setup do Display e opções de visualização
+    if(FULLSCREEN)
+        al_set_new_display_flags(ALLEGRO_FULLSCREEN);
+    display = al_create_display(DISPLAY_WIDTH, DISPLAY_HEIGHT);
+
+    if(!SHOWMOUSE)
+        al_hide_mouse_cursor(display);
+
+    if(!display)
+    {
+        al_show_native_message_box(NULL, "ERRO", "Incapaz de inicializar o Display", NULL, NULL, ALLEGRO_MESSAGEBOX_ERROR);
+        return -1;
+    }
+
+    // Setup das Fontes
+    ALLEGRO_FONT *arial_24 = al_load_font("arial.ttf", 24, 0);
+
+    // Setup dos Timers
+    drawTimer = al_create_timer(1.0 / FPS);
+    movementTimer = al_create_timer(1.0 / MOVEMENT_SPEED);
+    menuTimer = al_create_timer(1.0 / MENU_SPEED);
+
+
+    // Setup dos Eventos
+    event_queue = al_create_event_queue();
+    al_register_event_source(event_queue, al_get_keyboard_event_source());
+    al_register_event_source(event_queue, al_get_mouse_event_source());
+    al_register_event_source(event_queue, al_get_display_event_source(display));
+    al_register_event_source(event_queue, al_get_timer_event_source(drawTimer));
+    al_register_event_source(event_queue, al_get_timer_event_source(movementTimer));
+    al_register_event_source(event_queue, al_get_timer_event_source(menuTimer));
+
+    // Inicialização dos Timers
+    al_start_timer(drawTimer);
+    al_start_timer(movementTimer);
+    al_start_timer(menuTimer);
+
+    //--------------------------------------------------
+    // Definição das variaveis de estado
+    //--------------------------------------------------
+    char selectedOption = 0;
+    int menu = 0;
+
+    //--------------------------------------------------
+    // Definição das variaveis gerais
+    //--------------------------------------------------
+
+    //--------------------------------------------------
+    // Definição das variaveis auxiliares
+    //--------------------------------------------------
+    int j, i;
+
+    //--------------------------------------------------
+    // Loop para o jogo
+    //--------------------------------------------------
+    while(!done)
+    {
+        al_wait_for_event(event_queue, &ev);
+        done = checkEvents();
+
+        if(keys[ESC])
+            done = true;
+
+        if(menu == 0)
+        {
+            if(draw)
+            {
+                al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 100, 100, 0, "        NEW MAP");
+                al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 100, 125, 0, "        QUIT  ");
+
+                if(selectedOption == 0)
+                {
+                    al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 100, 100, 0, ">                           <");
+                }
+                else
+                {
+                    al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 100, 125, 0, ">                           <");
+                }
+
+                al_flip_display();
+                al_clear_to_color(al_map_rgb(0,0,0));
+
+                draw = false;
+            }
+
+            if(readMenu)
+            {
+                if(keys[UP] | keys[DOWN] | keys[W] | keys[S])
+                {
+                    selectedOption = !selectedOption;
+                    readMenu = false;
+                }
+
+                if(keys[ENTER])
+                {
+                    done = selectedOption;
+                    selectedOption = 0;
+                    menu = 1;
+                    readMenu = false;
+                }
+            }
+
+
+        }
+
+        if(menu == 1)
+        {
+            if(draw)
+            {
+                if(numLinhas == 0)
+                    al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 100, 100, 0, "        LINHAS:     _");
+                else
+                    al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 100, 100, 0, "        LINHAS:     %d_", numLinhas);
+                if(numColunas == 0)
+                    al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 100, 125, 0, "        COLUNAS:    _");
+                else
+                    al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 100, 125, 0, "        COLUNAS:    %d_", numColunas);
+
+                if(selectedOption == 0)
+                {
+                    al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 100, 100, 0, ">                                   <");
+                }
+                else if (selectedOption == 1)
+                {
+                    al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 100, 125, 0, ">                                   <");
+                }
+
+                al_flip_display();
+                al_clear_to_color(al_map_rgb(0,0,0));
+
+                draw = false;
+            }
+
+            if(readMenu)
+            {
+                readMenu = false;
+
+                if(selectedOption)
+                {
+                    if(keys[BACKSPACE])
+                        numColunas = (numColunas/10);
+                    else if((keys[A] || keys[LEFT]) && (numColunas>1))
+                        numColunas--;
+                    else if((keys[D] | keys[RIGHT]) && (numColunas < MAX_COLUNAS))
+                        numColunas++;
+                    else if(keys[N0])
+                        numColunas = (numColunas * 10) + 0;
+                    else if(keys[N1])
+                        numColunas = (numColunas * 10) + 1;
+                    else if(keys[N2])
+                        numColunas = (numColunas * 10) + 2;
+                    else if(keys[N3])
+                        numColunas = (numColunas * 10) + 3;
+                    else if(keys[N4])
+                        numColunas = (numColunas * 10) + 4;
+                    else if(keys[N5])
+                        numColunas = (numColunas * 10) + 5;
+                    else if(keys[N6])
+                        numColunas = (numColunas * 10) + 6;
+                    else if(keys[N7])
+                        numColunas = (numColunas * 10) + 7;
+                    else if(keys[N8])
+                        numColunas = (numColunas * 10) + 8;
+                    else if(keys[N9])
+                        numColunas = (numColunas * 10) + 9;
+                    else if(keys[UP] | keys[DOWN] | keys[W] | keys[S])
+                        selectedOption = !selectedOption;
+                    else
+                        readMenu = true;
+                    if(numColunas > MAX_COLUNAS)
+                        numColunas = MAX_COLUNAS;
+                }
+                else
+                {
+                    if(keys[BACKSPACE])
+                        numLinhas = (numLinhas/10);
+                    else if((keys[A] | keys[LEFT]) && (numLinhas > 1))
+                        numLinhas--;
+                    else if((keys[D] | keys[RIGHT]) && (numLinhas < MAX_LINHAS))
+                        numLinhas++;
+                    else if(keys[N0])
+                        numLinhas = (numLinhas * 10) + 0;
+                    else if(keys[N1])
+                        numLinhas = (numLinhas * 10) + 1;
+                    else if(keys[N2])
+                        numLinhas = (numLinhas * 10) + 2;
+                    else if(keys[N3])
+                        numLinhas = (numLinhas * 10) + 3;
+                    else if(keys[N4])
+                        numLinhas = (numLinhas * 10) + 4;
+                    else if(keys[N5])
+                        numLinhas = (numLinhas * 10) + 5;
+                    else if(keys[N6])
+                        numLinhas = (numLinhas * 10) + 6;
+                    else if(keys[N7])
+                        numLinhas = (numLinhas * 10) + 7;
+                    else if(keys[N8])
+                        numLinhas = (numLinhas * 10) + 8;
+                    else if(keys[N9])
+                        numLinhas = (numLinhas * 10) + 9;
+                    else if(keys[UP] | keys[DOWN] | keys[W] | keys[S])
+                        selectedOption = !selectedOption;
+                    else
+                        readMenu = true;
+                    if(numLinhas > MAX_LINHAS)
+                        numLinhas = MAX_LINHAS;
+                }
+
+                if(keys[ENTER])
+                {
+                    menu = 2;
+                }
+            }
+
+        }
+
+        if(menu == 2)
+        {
+            // READ MOUSE MOVEMENT (TO BLOCK LIMITS)
+            if(mouse.x < 0)
+                mouse.x = 0;
+            if(mouse.y < 0)
+                mouse.y = 0;
+            if(mouse.x > DISPLAY_WIDTH)
+                mouse.x = DISPLAY_WIDTH;
+            if(mouse.y > DISPLAY_HEIGHT)
+                mouse.y = DISPLAY_HEIGHT;
+
+            if(((mouse.x - mapa.x) / blockWidth) < numColunas)
+                mouseBlock.coluna = (mouse.x - mapa.x) / blockWidth;
+            if(((mouse.y - mapa.y) / blockHeight) < numLinhas)
+                mouseBlock.linha = (mouse.y - mapa.y) / blockHeight;
+
+            // READ MOUSE WHEEL MOVEMENT
+            if(mouse.z > mouseWheelBefore)
+            {
+                mouseWheelBefore = mouse.z;
+                selectedBlock++;
+                if(selectedBlock >= NUM_BLOCOS)
+                    selectedBlock = 1;
+            }
+            else if(mouse.z < mouseWheelBefore)
+            {
+                mouseWheelBefore = mouse.z;
+                selectedBlock--;
+                if(selectedBlock < 1)
+                    selectedBlock = NUM_BLOCOS - 1;
+            }
+
+            if(keys[MOUSE_1])
+                blocos[mouseBlock.linha][mouseBlock.coluna] = selectedBlock;
+            if(keys[MOUSE_2])
+                blocos[mouseBlock.linha][mouseBlock.coluna] = 0;
+
+            if(movement)
+            {
+                // READ MOVEMENT KEYS (WASD + ARROWS)
+                if(!(mapa.x >= 0))
+                    mapa.x += (keys[LEFT] | keys[A]) * (1 + 2 * keys[SHIFT]);
+                if(!(mapa.y >= 0))
+                    mapa.y += (keys[UP] | keys[W]) * (1 + 2 * keys[SHIFT]);
+                if(!(mapa.x <= ((-numColunas * blockWidth) + DISPLAY_WIDTH)))
+                    mapa.x -= (keys[RIGHT] | keys[D]) * (1 + 2 * keys[SHIFT]);
+                if(!(mapa.y <= ((-numLinhas * blockHeight) + DISPLAY_HEIGHT)))
+                    mapa.y -= (keys[DOWN] | keys[S]) * (1 + 2 * keys[SHIFT]);
+
+                movement = false;
+            }
+
+            if(keys[P])
+                menu = 3;
+            if(draw)
+            {
+                draw = false;
+                for(i = 0; i < numLinhas; i++)
+                {
+                    for(j = 0; j < numColunas; j++)
+                        if(((mapa.x + (j * blockWidth) + blockWidth) >= 0)&&((mapa.y + (i * blockHeight) + blockHeight)>= 0)&&((mapa.x + j * blockWidth) < DISPLAY_WIDTH)&&((mapa.y + i * blockHeight) < DISPLAY_HEIGHT))
+                        {
+                            switch(blocos[i][j])
+                            {
+                            case 0: // AR
+                                al_draw_filled_rectangle(mapa.x + j * blockWidth, mapa.y + i * blockHeight, mapa.x + (j * blockWidth) + blockWidth, mapa.y + (i * blockHeight) + blockHeight, al_map_rgb(COR_AR));
+                                break;
+                            case 1: // TERRA
+                                al_draw_filled_rectangle(mapa.x + j * blockWidth, mapa.y + i * blockHeight, mapa.x + (j * blockWidth) + blockWidth, mapa.y + (i * blockHeight) + blockHeight, al_map_rgb(COR_TERRA));
+                                break;
+                            case 2: // PEDRA
+                                al_draw_filled_rectangle(mapa.x + j * blockWidth, mapa.y + i * blockHeight, mapa.x + (j * blockWidth) + blockWidth, mapa.y + (i * blockHeight) + blockHeight, al_map_rgb(COR_PEDRA));
+                                break;
+                            case 3: // SILICIO
+                                al_draw_filled_rectangle(mapa.x + j * blockWidth, mapa.y + i * blockHeight, mapa.x + (j * blockWidth) + blockWidth, mapa.y + (i * blockHeight) + blockHeight, al_map_rgb(COR_SILICIO));
+                                break;
+                            case 4: // PEDRA INQUEBRAVEL
+                                al_draw_filled_rectangle(mapa.x + j * blockWidth, mapa.y + i * blockHeight, mapa.x + (j * blockWidth) + blockWidth, mapa.y + (i * blockHeight) + blockHeight, al_map_rgb(COR_LAVA));
+                                break;
+                            case 5: // PEDRA INQUEBRAVEL
+                                al_draw_filled_rectangle(mapa.x + j * blockWidth, mapa.y + i * blockHeight, mapa.x + (j * blockWidth) + blockWidth, mapa.y + (i * blockHeight) + blockHeight, al_map_rgb(COR_AGUA));
+                                break;
+                            }
+                        }
+                }
+
+                // DRAW BORDERS
+                if(SHOW_BORDER)
+                {
+                    al_draw_rectangle(mapa.x + mouseBlock.coluna * blockWidth, mapa.y + mouseBlock.linha * blockHeight, mapa.x + (mouseBlock.coluna * blockWidth) + blockWidth, mapa.y + (mouseBlock.linha * blockHeight) + blockHeight, al_map_rgb(COR_BORDAS), 1);
+                    al_draw_rectangle(1, 1, DISPLAY_WIDTH, DISPLAY_HEIGHT, al_map_rgb(COR_BORDAS), 1);
+                }
+
+                // DRAW SELECTED BLOCK PREVIEW
+                switch(selectedBlock)
+                {
+                case 1: // TERRA
+                    al_draw_filled_rectangle(DISPLAY_WIDTH - (10 + blockWidth), 10, DISPLAY_WIDTH - 10, 10 + blockHeight, al_map_rgb(COR_TERRA));
+                    break;
+                case 2: // PEDRA
+                    al_draw_filled_rectangle(DISPLAY_WIDTH - (10 + blockWidth), 10, DISPLAY_WIDTH - 10, 10 + blockHeight, al_map_rgb(COR_PEDRA));
+                    break;
+                case 3: // SILICIO
+                    al_draw_filled_rectangle(DISPLAY_WIDTH - (10 + blockWidth), 10, DISPLAY_WIDTH - 10, 10 + blockHeight, al_map_rgb(COR_SILICIO));
+                    break;
+                case 4: // LAVA
+                    al_draw_filled_rectangle(DISPLAY_WIDTH - (10 + blockWidth), 10, DISPLAY_WIDTH - 10, 10 + blockHeight, al_map_rgb(COR_LAVA));
+                    break;
+                case 5: // AGUA
+                    al_draw_filled_rectangle(DISPLAY_WIDTH - (10 + blockWidth), 10, DISPLAY_WIDTH - 10, 10 + blockHeight, al_map_rgb(COR_AGUA));
+                    break;
+                }
+
+                if(SHOW_BORDER)
+                    al_draw_rectangle(DISPLAY_WIDTH - (10 + blockWidth), 10, DISPLAY_WIDTH - 10, 10 + blockHeight, al_map_rgb(COR_BORDAS), 1);
+
+                //FLIP BUFFERS========================
+                al_flip_display();
+                al_clear_to_color(al_map_rgb(0,0,0));
+            }
+        }
+
+        if(menu == 3)
+        {
+            if(draw)
+            {
+                al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 100, 100, 0, "        CONTINUE");
+                al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 100, 125, 0, "        SAVE MAP");
+                al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 100, 150, 0, "        QUIT  ");
+
+                if(selectedOption == 0)
+                {
+                    al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 100, 100, 0, ">                           <");
+                }
+                else if(selectedOption == 1)
+                {
+                    al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 100, 125, 0, ">                           <");
+                }
+                else
+                {
+                    al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 100, 150, 0, ">                           <");
+                }
+
+                al_flip_display();
+                al_clear_to_color(al_map_rgb(0,0,0));
+
+                draw = false;
+            }
+
+            if(readMenu)
+            {
+                readMenu = false;
+
+                if(keys[UP] | keys[W])
+                    selectedOption--;
+                else if(keys[DOWN] | keys[S])
+                    selectedOption++;
+                else if(keys[ENTER])
+                {
+                    if(selectedOption == 0)
+                        menu = 2;
+                    else if(selectedOption == 1)
+                        saveMap();
+                    else
+                        done = true;
+                    selectedOption = 0;
+                    keys[ENTER] = false;
+                }
+                else
+                    readMenu = true;
+
+                if(selectedOption > 2)
+                    selectedOption = 0;
+
+                if(selectedOption < 0)
+                    selectedOption = 2;
+            }
+        }
+
+        // Reset timers
+        if(!readMenu)
+            al_start_timer(menuTimer);
+    }
+
+    //--------------------------------------------------
+    // Finalização do Allegro
+    //--------------------------------------------------
+
+    al_destroy_event_queue(event_queue);
+    al_destroy_timer(drawTimer);
+    al_destroy_timer(movementTimer);
+    al_destroy_timer(menuTimer);
+    al_destroy_display(display);
+
+    return 0;
+}
+
+int checkEvents()
+{
+    switch(ev.type)
+    {
+    case ALLEGRO_EVENT_KEY_DOWN:
+    case ALLEGRO_EVENT_KEY_UP:
+    case ALLEGRO_EVENT_MOUSE_BUTTON_DOWN:
+    case ALLEGRO_EVENT_MOUSE_BUTTON_UP:
+    case ALLEGRO_EVENT_MOUSE_AXES:
+        readInputs();
+        break;
+    case ALLEGRO_EVENT_TIMER:
+        if(ev.timer.source == drawTimer)
+        {
+            draw = true;
+        }
+        else if(ev.timer.source == movementTimer)
+        {
+            movement = true;
+        }
+        else if(ev.timer.source == menuTimer)
+        {
+            al_stop_timer(menuTimer);
+            readMenu = true;
+        }
+        break;
+    case ALLEGRO_EVENT_DISPLAY_CLOSE:
+        return 1;
+        break;
+    }
+    return 0;
+}
 
 void readInputs()
 {
-        //==============================================
-        //INPUT + OUTPUT
-        //==============================================
-        if(ev.type == ALLEGRO_EVENT_DISPLAY_CLOSE)
+    // Leitura dos eixos do mouse
+    if(ev.type == ALLEGRO_EVENT_MOUSE_AXES)
+    {
+        mouse.x = ev.mouse.x;
+        mouse.y = ev.mouse.y;
+        mouse.z = ev.mouse.z;
+    }
+
+    // Leitura dos botões do mouse
+    if(ev.type == ALLEGRO_EVENT_MOUSE_BUTTON_DOWN)
+    {
+        if(ev.mouse.button & 1)
+            keys[MOUSE_1] = true;
+
+        if(ev.mouse.button & 2)
+            keys[MOUSE_2] = true;
+    }
+    else if(ev.type == ALLEGRO_EVENT_MOUSE_BUTTON_UP)
+    {
+        if(ev.mouse.button & 1)
+            keys[MOUSE_1] = false;
+
+        if(ev.mouse.button & 2)
+            keys[MOUSE_2] = false;
+    }
+    // READ KEYBOARD INPUT
+    if(ev.type == ALLEGRO_EVENT_KEY_DOWN)
+    {
+        switch(ev.keyboard.keycode)
         {
-            done = true;
+        case ALLEGRO_KEY_A:
+            keys[A] = true;
+            break;
+        case ALLEGRO_KEY_B:
+            keys[B] = true;
+            break;
+        case ALLEGRO_KEY_C:
+            keys[C] = true;
+            break;
+        case ALLEGRO_KEY_D:
+            keys[D] = true;
+            break;
+        case ALLEGRO_KEY_E:
+            keys[E] = true;
+            break;
+        case ALLEGRO_KEY_F:
+            keys[F] = true;
+            break;
+        case ALLEGRO_KEY_G:
+            keys[G] = true;
+            break;
+        case ALLEGRO_KEY_H:
+            keys[H] = true;
+            break;
+        case ALLEGRO_KEY_I:
+            keys[I] = true;
+            break;
+        case ALLEGRO_KEY_J:
+            keys[J] = true;
+            break;
+        case ALLEGRO_KEY_K:
+            keys[K] = true;
+            break;
+        case ALLEGRO_KEY_L:
+            keys[L] = true;
+            break;
+        case ALLEGRO_KEY_M:
+            keys[M] = true;
+            break;
+        case ALLEGRO_KEY_N:
+            keys[N] = true;
+            break;
+        case ALLEGRO_KEY_O:
+            keys[O] = true;
+            break;
+        case ALLEGRO_KEY_P:
+            keys[P] = true;
+            break;
+        case ALLEGRO_KEY_Q:
+            keys[Q] = true;
+            break;
+        case ALLEGRO_KEY_R:
+            keys[R] = true;
+            break;
+        case ALLEGRO_KEY_S:
+            keys[S] = true;
+            break;
+        case ALLEGRO_KEY_T:
+            keys[T] = true;
+            break;
+        case ALLEGRO_KEY_U:
+            keys[U] = true;
+            break;
+        case ALLEGRO_KEY_V:
+            keys[V] = true;
+            break;
+        case ALLEGRO_KEY_W:
+            keys[W] = true;
+            break;
+        case ALLEGRO_KEY_X:
+            keys[X] = true;
+            break;
+        case ALLEGRO_KEY_Y:
+            keys[Y] = true;
+            break;
+        case ALLEGRO_KEY_Z:
+            keys[Z] = true;
+            break;
+
+        case ALLEGRO_KEY_0:
+        case ALLEGRO_KEY_PAD_0:
+            keys[N0] = true;
+            break;
+        case ALLEGRO_KEY_1:
+        case ALLEGRO_KEY_PAD_1:
+            keys[N1] = true;
+            break;
+        case ALLEGRO_KEY_2:
+        case ALLEGRO_KEY_PAD_2:
+            keys[N2] = true;
+            break;
+        case ALLEGRO_KEY_3:
+        case ALLEGRO_KEY_PAD_3:
+            keys[N3] = true;
+            break;
+        case ALLEGRO_KEY_4:
+        case ALLEGRO_KEY_PAD_4:
+            keys[N4] = true;
+            break;
+        case ALLEGRO_KEY_5:
+        case ALLEGRO_KEY_PAD_5:
+            keys[N5] = true;
+            break;
+        case ALLEGRO_KEY_6:
+        case ALLEGRO_KEY_PAD_6:
+            keys[N6] = true;
+            break;
+        case ALLEGRO_KEY_7:
+        case ALLEGRO_KEY_PAD_7:
+            keys[N7] = true;
+            break;
+        case ALLEGRO_KEY_8:
+        case ALLEGRO_KEY_PAD_8:
+            keys[N8] = true;
+            break;
+        case ALLEGRO_KEY_9:
+        case ALLEGRO_KEY_PAD_9:
+            keys[N9] = true;
+            break;
+
+        case ALLEGRO_KEY_F1:
+            keys[F1] = true;
+            break;
+        case ALLEGRO_KEY_F2:
+            keys[F2] = true;
+            break;
+        case ALLEGRO_KEY_F3:
+            keys[F3] = true;
+            break;
+        case ALLEGRO_KEY_F4:
+            keys[F4] = true;
+            break;
+        case ALLEGRO_KEY_F5:
+            keys[F5] = true;
+            break;
+        case ALLEGRO_KEY_F6:
+            keys[F6] = true;
+            break;
+        case ALLEGRO_KEY_F7:
+            keys[F7] = true;
+            break;
+        case ALLEGRO_KEY_F8:
+            keys[F8] = true;
+            break;
+        case ALLEGRO_KEY_F9:
+            keys[F9] = true;
+            break;
+        case ALLEGRO_KEY_F10:
+            keys[F10] = true;
+            break;
+        case ALLEGRO_KEY_F11:
+            keys[F11] = true;
+            break;
+        case ALLEGRO_KEY_F12:
+            keys[F12] = true;
+            break;
+
+        case ALLEGRO_KEY_UP:
+            keys[UP] = true;
+            break;
+        case ALLEGRO_KEY_DOWN:
+            keys[DOWN] = true;
+            break;
+        case ALLEGRO_KEY_RIGHT:
+            keys[RIGHT] = true;
+            break;
+        case ALLEGRO_KEY_LEFT:
+            keys[LEFT] = true;
+            break;
+        case ALLEGRO_KEY_TAB:
+            keys[TAB] = true;
+            break;
+        case ALLEGRO_KEY_LSHIFT:
+        case ALLEGRO_KEY_RSHIFT:
+            keys[SHIFT] = true;
+            break;
+        case ALLEGRO_KEY_LCTRL:
+        case ALLEGRO_KEY_RCTRL:
+            keys[CTRL] = true;
+            break;
+        case ALLEGRO_KEY_ALT:
+            keys[ALT] = true;
+            break;
+        case ALLEGRO_KEY_ENTER:
+            keys[ENTER] = true;
+            break;
+        case ALLEGRO_KEY_BACKSPACE:
+            keys[BACKSPACE] = true;
+            break;
+        case ALLEGRO_KEY_SPACE:
+            keys[SPACE] = true;
+            break;
+        case ALLEGRO_KEY_ESCAPE:
+            keys[ESC] = true;
+            break;
         }
-        if(ev.type == ALLEGRO_EVENT_MOUSE_AXES)
+    }
+    else if(ev.type == ALLEGRO_EVENT_KEY_UP)
+    {
+        switch(ev.keyboard.keycode)
         {
-            pos_mouse_x = ev.mouse.x;
-            pos_mouse_y = ev.mouse.y;
-            mouseWheelNow = ev.mouse.z;
+        case ALLEGRO_KEY_A:
+            keys[A] = false;
+            break;
+        case ALLEGRO_KEY_B:
+            keys[B] = false;
+            break;
+        case ALLEGRO_KEY_C:
+            keys[C] = false;
+            break;
+        case ALLEGRO_KEY_D:
+            keys[D] = false;
+            break;
+        case ALLEGRO_KEY_E:
+            keys[E] = false;
+            break;
+        case ALLEGRO_KEY_F:
+            keys[F] = false;
+            break;
+        case ALLEGRO_KEY_G:
+            keys[G] = false;
+            break;
+        case ALLEGRO_KEY_H:
+            keys[H] = false;
+            break;
+        case ALLEGRO_KEY_I:
+            keys[I] = false;
+            break;
+        case ALLEGRO_KEY_J:
+            keys[J] = false;
+            break;
+        case ALLEGRO_KEY_K:
+            keys[K] = false;
+            break;
+        case ALLEGRO_KEY_L:
+            keys[L] = false;
+            break;
+        case ALLEGRO_KEY_M:
+            keys[M] = false;
+            break;
+        case ALLEGRO_KEY_N:
+            keys[N] = false;
+            break;
+        case ALLEGRO_KEY_O:
+            keys[O] = false;
+            break;
+        case ALLEGRO_KEY_P:
+            keys[P] = false;
+            break;
+        case ALLEGRO_KEY_Q:
+            keys[Q] = false;
+            break;
+        case ALLEGRO_KEY_R:
+            keys[R] = false;
+            break;
+        case ALLEGRO_KEY_S:
+            keys[S] = false;
+            break;
+        case ALLEGRO_KEY_T:
+            keys[T] = false;
+            break;
+        case ALLEGRO_KEY_U:
+            keys[U] = false;
+            break;
+        case ALLEGRO_KEY_V:
+            keys[V] = false;
+            break;
+        case ALLEGRO_KEY_W:
+            keys[W] = false;
+            break;
+        case ALLEGRO_KEY_X:
+            keys[X] = false;
+            break;
+        case ALLEGRO_KEY_Y:
+            keys[Y] = false;
+            break;
+        case ALLEGRO_KEY_Z:
+            keys[Z] = false;
+            break;
+
+        case ALLEGRO_KEY_0:
+        case ALLEGRO_KEY_PAD_0:
+            keys[N0] = false;
+            break;
+        case ALLEGRO_KEY_1:
+        case ALLEGRO_KEY_PAD_1:
+            keys[N1] = false;
+            break;
+        case ALLEGRO_KEY_2:
+        case ALLEGRO_KEY_PAD_2:
+            keys[N2] = false;
+            break;
+        case ALLEGRO_KEY_3:
+        case ALLEGRO_KEY_PAD_3:
+            keys[N3] = false;
+            break;
+        case ALLEGRO_KEY_4:
+        case ALLEGRO_KEY_PAD_4:
+            keys[N4] = false;
+            break;
+        case ALLEGRO_KEY_5:
+        case ALLEGRO_KEY_PAD_5:
+            keys[N5] = false;
+            break;
+        case ALLEGRO_KEY_6:
+        case ALLEGRO_KEY_PAD_6:
+            keys[N6] = false;
+            break;
+        case ALLEGRO_KEY_7:
+        case ALLEGRO_KEY_PAD_7:
+            keys[N7] = false;
+            break;
+        case ALLEGRO_KEY_8:
+        case ALLEGRO_KEY_PAD_8:
+            keys[N8] = false;
+            break;
+        case ALLEGRO_KEY_9:
+        case ALLEGRO_KEY_PAD_9:
+            keys[N9] = false;
+            break;
+
+        case ALLEGRO_KEY_F1:
+            keys[F1] = false;
+            break;
+        case ALLEGRO_KEY_F2:
+            keys[F2] = false;
+            break;
+        case ALLEGRO_KEY_F3:
+            keys[F3] = false;
+            break;
+        case ALLEGRO_KEY_F4:
+            keys[F4] = false;
+            break;
+        case ALLEGRO_KEY_F5:
+            keys[F5] = false;
+            break;
+        case ALLEGRO_KEY_F6:
+            keys[F6] = false;
+            break;
+        case ALLEGRO_KEY_F7:
+            keys[F7] = false;
+            break;
+        case ALLEGRO_KEY_F8:
+            keys[F8] = false;
+            break;
+        case ALLEGRO_KEY_F9:
+            keys[F9] = false;
+            break;
+        case ALLEGRO_KEY_F10:
+            keys[F10] = false;
+            break;
+        case ALLEGRO_KEY_F11:
+            keys[F11] = false;
+            break;
+        case ALLEGRO_KEY_F12:
+            keys[F12] = false;
+            break;
+
+        case ALLEGRO_KEY_UP:
+            keys[UP] = false;
+            break;
+        case ALLEGRO_KEY_DOWN:
+            keys[DOWN] = false;
+            break;
+        case ALLEGRO_KEY_RIGHT:
+            keys[RIGHT] = false;
+            break;
+        case ALLEGRO_KEY_LEFT:
+            keys[LEFT] = false;
+            break;
+        case ALLEGRO_KEY_TAB:
+            keys[TAB] = false;
+            break;
+        case ALLEGRO_KEY_LSHIFT:
+        case ALLEGRO_KEY_RSHIFT:
+            keys[SHIFT] = false;
+            break;
+        case ALLEGRO_KEY_LCTRL:
+        case ALLEGRO_KEY_RCTRL:
+            keys[CTRL] = false;
+            break;
+        case ALLEGRO_KEY_ALT:
+            keys[ALT] = false;
+            break;
+        case ALLEGRO_KEY_ENTER:
+            keys[ENTER] = false;
+            break;
+        case ALLEGRO_KEY_BACKSPACE:
+            keys[BACKSPACE] = false;
+            break;
+        case ALLEGRO_KEY_SPACE:
+            keys[SPACE] = false;
+            break;
+        case ALLEGRO_KEY_ESCAPE:
+            keys[ESC] = false;
+            break;
         }
-
-        // READ MOUSE CLICKS (BUTTONS 1 AND 2)
-        if(ev.type == ALLEGRO_EVENT_MOUSE_BUTTON_DOWN)
-        {
-            if(ev.mouse.button & 1)
-            {
-                blocos[linha_Mouse][coluna_Mouse] = selectedBlock;
-            }
-
-            if(ev.mouse.button & 2)
-            {
-                blocos[linha_Mouse][coluna_Mouse] = 0;
-            }
-        }
-        // READ KEYBOARD INPUT
-        if(ev.type == ALLEGRO_EVENT_KEY_DOWN)
-        {
-            switch(ev.keyboard.keycode)
-            {
-            case ALLEGRO_KEY_ESCAPE:
-                done = true;
-                break;
-            case ALLEGRO_KEY_LEFT:
-                keys[LEFT] = true;
-                break;
-            case ALLEGRO_KEY_RIGHT:
-                keys[RIGHT] = true;
-                break;
-            case ALLEGRO_KEY_UP:
-                keys[UP] = true;
-                break;
-            case ALLEGRO_KEY_DOWN:
-                keys[DOWN] = true;
-                break;
-            case ALLEGRO_KEY_A:
-                keys[A] = true;
-                break;
-            case ALLEGRO_KEY_D:
-                keys[D] = true;
-                break;
-            case ALLEGRO_KEY_W:
-                keys[W] = true;
-                break;
-            case ALLEGRO_KEY_S:
-                keys[S] = true;
-                break;
-            case ALLEGRO_KEY_P:
-                keys[P] = true;
-                break;
-            case ALLEGRO_KEY_0:
-            case ALLEGRO_KEY_PAD_0:
-                keys[N0] = true;
-                break;
-            case ALLEGRO_KEY_1:
-            case ALLEGRO_KEY_PAD_1:
-                keys[N1] = true;
-                break;
-            case ALLEGRO_KEY_2:
-            case ALLEGRO_KEY_PAD_2:
-                keys[N2] = true;
-                break;
-            case ALLEGRO_KEY_3:
-            case ALLEGRO_KEY_PAD_3:
-                keys[N3] = true;
-                break;
-            case ALLEGRO_KEY_4:
-            case ALLEGRO_KEY_PAD_4:
-                keys[N4] = true;
-                break;
-            case ALLEGRO_KEY_5:
-            case ALLEGRO_KEY_PAD_5:
-                keys[N5] = true;
-                break;
-            case ALLEGRO_KEY_6:
-            case ALLEGRO_KEY_PAD_6:
-                keys[N6] = true;
-                break;
-            case ALLEGRO_KEY_7:
-            case ALLEGRO_KEY_PAD_7:
-                keys[N7] = true;
-                break;
-            case ALLEGRO_KEY_8:
-            case ALLEGRO_KEY_PAD_8:
-                keys[N8] = true;
-                break;
-            case ALLEGRO_KEY_9:
-            case ALLEGRO_KEY_PAD_9:
-                keys[N9] = true;
-                break;
-            case ALLEGRO_KEY_SPACE:
-                keys[SPACE] = true;
-                break;
-            case ALLEGRO_KEY_BACKSPACE:
-                keys[BACKSPACE] = true;
-                break;
-            case ALLEGRO_KEY_ENTER:
-                keys[ENTER] = true;
-                break;
-            }
-        }
-        if(ev.type == ALLEGRO_EVENT_KEY_UP)
-        {
-            switch(ev.keyboard.keycode)
-            {
-            case ALLEGRO_KEY_ESCAPE:
-                done = true;
-                break;
-            case ALLEGRO_KEY_LEFT:
-                keys[LEFT] = false;
-                break;
-            case ALLEGRO_KEY_RIGHT:
-                keys[RIGHT] = false;
-                break;
-            case ALLEGRO_KEY_UP:
-                keys[UP] = false;
-                break;
-            case ALLEGRO_KEY_DOWN:
-                keys[DOWN] = false;
-                break;
-            case ALLEGRO_KEY_A:
-                keys[A] = false;
-                break;
-            case ALLEGRO_KEY_D:
-                keys[D] = false;
-                break;
-            case ALLEGRO_KEY_W:
-                keys[W] = false;
-                break;
-            case ALLEGRO_KEY_S:
-                keys[S] = false;
-                break;
-            case ALLEGRO_KEY_P:
-                keys[P] = false;
-                break;
-            case ALLEGRO_KEY_0:
-            case ALLEGRO_KEY_PAD_0:
-                keys[N0] = false;
-                break;
-            case ALLEGRO_KEY_1:
-            case ALLEGRO_KEY_PAD_1:
-                keys[N1] = false;
-                break;
-            case ALLEGRO_KEY_2:
-            case ALLEGRO_KEY_PAD_2:
-                keys[N2] = false;
-                break;
-            case ALLEGRO_KEY_3:
-            case ALLEGRO_KEY_PAD_3:
-                keys[N3] = false;
-                break;
-            case ALLEGRO_KEY_4:
-            case ALLEGRO_KEY_PAD_4:
-                keys[N4] = false;
-                break;
-            case ALLEGRO_KEY_5:
-            case ALLEGRO_KEY_PAD_5:
-                keys[N5] = false;
-                break;
-            case ALLEGRO_KEY_6:
-            case ALLEGRO_KEY_PAD_6:
-                keys[N6] = false;
-                break;
-            case ALLEGRO_KEY_7:
-            case ALLEGRO_KEY_PAD_7:
-                keys[N7] = false;
-                break;
-            case ALLEGRO_KEY_8:
-            case ALLEGRO_KEY_PAD_8:
-                keys[N8] = false;
-                break;
-            case ALLEGRO_KEY_9:
-            case ALLEGRO_KEY_PAD_9:
-                keys[N9] = false;
-                break;
-            case ALLEGRO_KEY_SPACE:
-                keys[SPACE] = false;
-                break;
-            case ALLEGRO_KEY_BACKSPACE:
-                keys[BACKSPACE] = false;
-                break;
-            case ALLEGRO_KEY_ENTER:
-                keys[ENTER] = false;
-                break;
-            }
-
-        }
-
-        // READ MOUSE MOVEMENT (TO BLOCK LIMITS)
-        if(((pos_mouse_x - pos_blocos_x) / blockWidth) < numColunas)
-            coluna_Mouse = (pos_mouse_x - pos_blocos_x) / blockWidth;
-        if(((pos_mouse_y - pos_blocos_y) / blockHeight)< numLinhas)
-            linha_Mouse = (pos_mouse_y - pos_blocos_y) / blockHeight;
-
-        // READ MOUSE WHEEL MOVEMENT
-        if(mouseWheelNow > mouseWheelBefore){
-            mouseWheelBefore = mouseWheelNow;
-            selectedBlock++;
-            if(selectedBlock >= NUM_BLOCOS)
-                selectedBlock = 1;
-        }else if(mouseWheelNow < mouseWheelBefore){
-            mouseWheelBefore = mouseWheelNow;
-            selectedBlock--;
-            if(selectedBlock < 1)
-                selectedBlock = NUM_BLOCOS - 1;
-        }
-
-        // READ MOVEMENT KEYS (WASD + ARROWS)
-        if(!(pos_blocos_x >= 0))
-            pos_blocos_x += (keys[LEFT] | keys[A]) * 10;
-        if(!(pos_blocos_y >= 0))
-            pos_blocos_y += (keys[UP] | keys[W]) * 10;
-        if(!(pos_blocos_x <= ((-numColunas * blockWidth) + WIDTH)))
-            pos_blocos_x -= (keys[RIGHT] | keys[D]) * 10;
-        if(!(pos_blocos_y <= ((-numLinhas * blockHeight) + HEIGHT)))
-            pos_blocos_y -= (keys[DOWN] | keys[S]) * 10;
-
-
-}
-
-void waitForKeyRelease(){
-    while(KEY_PRESS){
-        al_wait_for_event(event_queue, &ev);
-        readInputs();
     }
 }
 
-void saveMap(ALLEGRO_DISPLAY *displayOriginal)
+void saveMap()
 {
     //==============================================
     //PROJECT VARIABLES
     //==============================================
     FILE *fp;
     ALLEGRO_FILECHOOSER *file;
-    ALLEGRO_DISPLAY *display = displayOriginal;
 
     //==============================================
     //AUXILIAR VARIABLES
@@ -327,12 +1041,16 @@ void saveMap(ALLEGRO_DISPLAY *displayOriginal)
 
     file = al_create_native_file_dialog("", "Choose File location and name", "*.txt",ALLEGRO_FILECHOOSER_MULTIPLE);
     al_show_native_file_dialog(display, file);
-    char *mapName = al_get_native_file_dialog_path(file, 0);
+    char mapNameTxt[100] = "";
+    const char *mapName = al_get_native_file_dialog_path(file, 0);
 
-    if((mapName[strlen(mapName)-1] != 't')||(mapName[strlen(mapName)-2] != 'x')||(mapName[strlen(mapName)-3] != 't')||(mapName[strlen(mapName)-4] != '.'))
-        strcat(mapName, ".txt");
+    strcpy(mapNameTxt, mapName);
+
+    if((mapNameTxt[strlen(mapNameTxt)-1] != 't')||(mapNameTxt[strlen(mapNameTxt)-2] != 'x')||(mapNameTxt[strlen(mapNameTxt)-3] != 't')||(mapNameTxt[strlen(mapNameTxt)-4] != '.'))
+        strcat(mapNameTxt, ".txt");
+
     // SAVE MAP TO FILE
-    fp = fopen(mapName, "w");
+    fp = fopen(mapNameTxt, "w");
     fprintf(fp, "%d %d\n", numLinhas, numColunas);
     for(i = 0; i < numLinhas; i++)
     {
@@ -343,357 +1061,3 @@ void saveMap(ALLEGRO_DISPLAY *displayOriginal)
     fclose(fp);
 }
 
-int main(void)
-{
-    //==============================================
-    //SHELL VARIABLES
-    //==============================================
-    bool render = false;
-    float gameTime = 0;
-    int frames = 0;
-    int gameFPS = 0;
-
-    //==============================================
-    //PROJECT VARIABLES
-    //==============================================
-    char selectedOption = 0;
-    bool menu = true;
-    bool pause = true;
-
-    //==============================================
-    //AUXILIAR VARIABLES
-    //==============================================
-    int j, i;
-
-    //==============================================
-    //ALLEGRO VARIABLES
-    //==============================================
-    ALLEGRO_DISPLAY *display = NULL;
-    ALLEGRO_TIMER *timer;
-    ALLEGRO_FONT *font18;
-
-    //==============================================
-    //ALLEGRO INIT FUNCTIONS
-    //==============================================
-    if(!al_init())										//initialize Allegro
-        return -1;
-    if(FULLSCREEN)
-    al_set_new_display_flags(ALLEGRO_FULLSCREEN);
-    display = al_create_display(WIDTH, HEIGHT);			//create our display object
-    if(!display)										//test display object
-        return -1;
-
-    //==============================================
-    //ADDON INSTALL
-    //==============================================
-    al_install_keyboard();
-    al_install_mouse();
-    al_init_image_addon();
-    al_init_font_addon();
-    al_init_ttf_addon();
-    al_init_primitives_addon();
-
-    //==============================================
-    //PROJECT INIT
-    //==============================================
-    font18 = al_load_font("arial.ttf", 18, 0);
-
-    //==============================================
-    //TIMER INIT AND STARTUP
-    //==============================================
-    event_queue = al_create_event_queue();
-    timer = al_create_timer(1.0 / FPS);
-
-    al_register_event_source(event_queue, al_get_timer_event_source(timer));
-    al_register_event_source(event_queue, al_get_keyboard_event_source());
-    al_register_event_source(event_queue, al_get_display_event_source(display));
-    al_register_event_source(event_queue, al_get_mouse_event_source());
-
-    al_start_timer(timer);
-    gameTime = al_current_time();
-    if(!SHOWMOUSE)
-        al_hide_mouse_cursor(display);
-
-    // MENU
-    while(menu && !done)
-    {
-        al_wait_for_event(event_queue, &ev);
-        readInputs();
-
-        al_draw_textf(font18, al_map_rgb(COR_BORDAS), 100, 100, 0, "        NEW MAP");
-        al_draw_textf(font18, al_map_rgb(COR_BORDAS), 100, 125, 0, "        QUIT  ");
-
-        if(selectedOption == 0){
-            al_draw_textf(font18, al_map_rgb(COR_BORDAS), 100, 100, 0, ">                           <");
-        }else{
-            al_draw_textf(font18, al_map_rgb(COR_BORDAS), 100, 125, 0, ">                           <");
-        }
-
-        if(keys[UP] | keys[DOWN] | keys[W] | keys[S])
-            selectedOption = !selectedOption;
-
-        al_flip_display();
-        al_clear_to_color(al_map_rgb(0,0,0));
-
-        if(keys[ENTER]){
-            done = selectedOption;
-            selectedOption = 0;
-            break;
-        }
-        waitForKeyRelease();
-    }
-
-    while(keys[ENTER]){
-        al_wait_for_event(event_queue, &ev);
-        readInputs();
-    }
-
-    // NUM COLUNAS E LINHAS
-    while(pause && !done){
-        al_wait_for_event(event_queue, &ev);
-        readInputs();
-
-        if(numLinhas == 0)
-            al_draw_textf(font18, al_map_rgb(COR_BORDAS), 100, 100, 0, "        LINHAS:     _");
-        else
-            al_draw_textf(font18, al_map_rgb(COR_BORDAS), 100, 100, 0, "        LINHAS:     %d_", numLinhas);
-        if(numColunas == 0)
-            al_draw_textf(font18, al_map_rgb(COR_BORDAS), 100, 125, 0, "        COLUNAS:    _");
-        else
-            al_draw_textf(font18, al_map_rgb(COR_BORDAS), 100, 125, 0, "        COLUNAS:    %d_", numColunas);
-
-        if(selectedOption == 0){
-            al_draw_textf(font18, al_map_rgb(COR_BORDAS), 100, 100, 0, ">                                   <");
-        }else if (selectedOption == 1){
-            al_draw_textf(font18, al_map_rgb(COR_BORDAS), 100, 125, 0, ">                                   <");
-        }
-
-        if(KEY_PRESS){
-            if(selectedOption){
-                if(keys[BACKSPACE])
-                    numColunas = (numColunas/10);
-                else if((keys[A] || keys[LEFT]) && (numColunas>1))
-                    numColunas--;
-                else if((keys[D] | keys[RIGHT]) && (numColunas < MAX_COLUNAS))
-                    numColunas++;
-                else if(keys[N0])
-                    numColunas = (numColunas * 10) + 0;
-                else if(keys[N1])
-                    numColunas = (numColunas * 10) + 1;
-                else if(keys[N2])
-                    numColunas = (numColunas * 10) + 2;
-                else if(keys[N3])
-                    numColunas = (numColunas * 10) + 3;
-                else if(keys[N4])
-                    numColunas = (numColunas * 10) + 4;
-                else if(keys[N5])
-                    numColunas = (numColunas * 10) + 5;
-                else if(keys[N6])
-                    numColunas = (numColunas * 10) + 6;
-                else if(keys[N7])
-                    numColunas = (numColunas * 10) + 7;
-                else if(keys[N8])
-                    numColunas = (numColunas * 10) + 8;
-                else if(keys[N9])
-                    numColunas = (numColunas * 10) + 9;
-                if(numColunas > MAX_COLUNAS)
-                    numColunas = MAX_COLUNAS;
-            }else{
-                if(keys[BACKSPACE])
-                    numLinhas = (numLinhas/10);
-                if((keys[A] | keys[LEFT]) && (numLinhas > 1))
-                    numLinhas--;
-                if((keys[D] | keys[RIGHT]) && (numLinhas < MAX_LINHAS))
-                    numLinhas++;
-                else if(keys[N0])
-                    numLinhas = (numLinhas * 10) + 0;
-                else if(keys[N1])
-                    numLinhas = (numLinhas * 10) + 1;
-                else if(keys[N2])
-                    numLinhas = (numLinhas * 10) + 2;
-                else if(keys[N3])
-                    numLinhas = (numLinhas * 10) + 3;
-                else if(keys[N4])
-                    numLinhas = (numLinhas * 10) + 4;
-                else if(keys[N5])
-                    numLinhas = (numLinhas * 10) + 5;
-                else if(keys[N6])
-                    numLinhas = (numLinhas * 10) + 6;
-                else if(keys[N7])
-                    numLinhas = (numLinhas * 10) + 7;
-                else if(keys[N8])
-                    numLinhas = (numLinhas * 10) + 8;
-                else if(keys[N9])
-                    numLinhas = (numLinhas * 10) + 9;
-                if(numLinhas > MAX_LINHAS)
-                    numLinhas = MAX_LINHAS;
-            }
-            if(keys[UP] | keys[DOWN] | keys[W] | keys[S])
-                selectedOption = !selectedOption;
-
-            if(keys[ENTER]){
-                pause = false;
-                break;
-            }
-
-            waitForKeyRelease();
-        }
-        al_flip_display();
-        al_clear_to_color(al_map_rgb(0,0,0));
-    }
-
-    // GAME
-    while(!done)
-    {
-        al_wait_for_event(event_queue, &ev);
-
-        //==============================================
-        // INPUT + OUTPUT
-        //==============================================
-        readInputs();
-
-        //==============================================
-        //GAME UPDATE
-        //==============================================
-        if(ev.type == ALLEGRO_EVENT_TIMER)
-        {
-            render = true;
-
-            //UPDATE FPS===========
-            frames++;
-            if(al_current_time() - gameTime >= 1)
-            {
-                gameTime = al_current_time();
-                gameFPS = frames;
-                frames = 0;
-            }
-            //=====================
-        }
-
-        if(keys[P]){
-            pause = true;
-            waitForKeyRelease();
-        }
-        while(pause && (!done)){
-            al_draw_textf(font18, al_map_rgb(COR_BORDAS), 100, 100, 0, "        CONTINUE");
-            al_draw_textf(font18, al_map_rgb(COR_BORDAS), 100, 125, 0, "        SAVE MAP");
-            al_draw_textf(font18, al_map_rgb(COR_BORDAS), 100, 150, 0, "        QUIT  ");
-
-            if(selectedOption == 0){
-                al_draw_textf(font18, al_map_rgb(COR_BORDAS), 100, 100, 0, ">                           <");
-            }else if(selectedOption == 1){
-                al_draw_textf(font18, al_map_rgb(COR_BORDAS), 100, 125, 0, ">                           <");
-            }else{
-                al_draw_textf(font18, al_map_rgb(COR_BORDAS), 100, 150, 0, ">                           <");
-            }
-            al_wait_for_event(event_queue, &ev);
-            readInputs();
-            al_flip_display();
-            al_clear_to_color(al_map_rgb(0,0,0));
-
-            if(keys[UP] | keys[W])
-                selectedOption--;
-            if(keys[DOWN] | keys[S])
-                selectedOption++;
-
-            if(selectedOption > 2)
-                selectedOption = 0;
-            else if(selectedOption < 0)
-                selectedOption = 2;
-
-            if(keys[ENTER]){
-                waitForKeyRelease();
-                if(selectedOption == 0)
-                    pause = false;
-                else if(selectedOption == 1){
-                    saveMap(display);
-                    pause = false;
-                }else
-                    done = true;
-                selectedOption = 0;
-                break;
-            }
-            waitForKeyRelease();
-        }
-
-        //==============================================
-        //RENDER
-        //==============================================
-        if(render && al_is_event_queue_empty(event_queue))
-        {
-            render = false;
-            //BEGIN PROJECT RENDER================
-
-            // DRAW BLOCKS:
-            for(i = 0; i < numLinhas; i++){
-                for(j = 0; j < numColunas; j++)
-                    switch(blocos[i][j]){
-                        case 0: // AR
-                            al_draw_filled_rectangle(pos_blocos_x + j * blockWidth, pos_blocos_y + i * blockHeight, pos_blocos_x + (j * blockWidth) + blockWidth, pos_blocos_y + (i * blockHeight) + blockHeight, al_map_rgb(COR_AR));
-                            break;
-                        case 1: // TERRA
-                            al_draw_filled_rectangle(pos_blocos_x + j * blockWidth, pos_blocos_y + i * blockHeight, pos_blocos_x + (j * blockWidth) + blockWidth, pos_blocos_y + (i * blockHeight) + blockHeight, al_map_rgb(COR_TERRA));
-                            break;
-                        case 2: // PEDRA
-                            al_draw_filled_rectangle(pos_blocos_x + j * blockWidth, pos_blocos_y + i * blockHeight, pos_blocos_x + (j * blockWidth) + blockWidth, pos_blocos_y + (i * blockHeight) + blockHeight, al_map_rgb(COR_PEDRA));
-                            break;
-                        case 3: // SILICIO
-                            al_draw_filled_rectangle(pos_blocos_x + j * blockWidth, pos_blocos_y + i * blockHeight, pos_blocos_x + (j * blockWidth) + blockWidth, pos_blocos_y + (i * blockHeight) + blockHeight, al_map_rgb(COR_SILICIO));
-                            break;
-                        case 4: // PEDRA INQUEBRAVEL
-                            al_draw_filled_rectangle(pos_blocos_x + j * blockWidth, pos_blocos_y + i * blockHeight, pos_blocos_x + (j * blockWidth) + blockWidth, pos_blocos_y + (i * blockHeight) + blockHeight, al_map_rgb(COR_LAVA));
-                            break;
-                        case 5: // PEDRA INQUEBRAVEL
-                            al_draw_filled_rectangle(pos_blocos_x + j * blockWidth, pos_blocos_y + i * blockHeight, pos_blocos_x + (j * blockWidth) + blockWidth, pos_blocos_y + (i * blockHeight) + blockHeight, al_map_rgb(COR_AGUA));
-                            break;
-                    }
-            }
-
-            // DRAW FPS
-            al_draw_textf(font18, al_map_rgb(255, 0, 255), 5, 5, 0, "FPS: %i", gameFPS);	//display FPS on screen
-
-            // DRAW BORDERS
-            if(SHOW_BORDER){
-                al_draw_rectangle(pos_blocos_x + coluna_Mouse * blockWidth, pos_blocos_y + linha_Mouse * blockHeight, pos_blocos_x + (coluna_Mouse * blockWidth) + blockWidth, pos_blocos_y + (linha_Mouse * blockHeight) + blockHeight, al_map_rgb(COR_BORDAS), 1);
-                al_draw_rectangle(1, 1, WIDTH, HEIGHT, al_map_rgb(COR_BORDAS), 1);
-            }
-
-            // DRAW SELECTED BLOCK PREVIEW
-            switch(selectedBlock){
-                case 1: // TERRA
-                    al_draw_filled_rectangle(WIDTH - (10 + blockWidth), 10, WIDTH - 10, 10 + blockHeight, al_map_rgb(COR_TERRA));
-                    break;
-                case 2: // PEDRA
-                    al_draw_filled_rectangle(WIDTH - (10 + blockWidth), 10, WIDTH - 10, 10 + blockHeight, al_map_rgb(COR_PEDRA));
-                    break;
-                case 3: // SILICIO
-                    al_draw_filled_rectangle(WIDTH - (10 + blockWidth), 10, WIDTH - 10, 10 + blockHeight, al_map_rgb(COR_SILICIO));
-                    break;
-                case 4: // LAVA
-                    al_draw_filled_rectangle(WIDTH - (10 + blockWidth), 10, WIDTH - 10, 10 + blockHeight, al_map_rgb(COR_LAVA));
-                    break;
-                case 5: // AGUA
-                    al_draw_filled_rectangle(WIDTH - (10 + blockWidth), 10, WIDTH - 10, 10 + blockHeight, al_map_rgb(COR_AGUA));
-                    break;
-            }
-            if(SHOW_BORDER)
-                al_draw_rectangle(WIDTH - (10 + blockWidth), 10, WIDTH - 10, 10 + blockHeight, al_map_rgb(COR_BORDAS), 1);
-
-            //FLIP BUFFERS========================
-            al_flip_display();
-            al_clear_to_color(al_map_rgb(0,0,0));
-        }
-    }
-
-    //==============================================
-    //DESTROY PROJECT OBJECTS
-    //==============================================
-
-    //SHELL OBJECTS=================================
-    al_destroy_font(font18);
-    al_destroy_timer(timer);
-    al_destroy_event_queue(event_queue);
-    al_destroy_display(display);
-
-    return 0;
-}
