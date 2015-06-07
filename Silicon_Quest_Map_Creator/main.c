@@ -18,7 +18,7 @@
 //--------------------------------------------------
 
 // Definições da tela
-#define FULLSCREEN  0
+#define FULLSCREEN      1
 #define DISPLAY_WIDTH   1600
 #define DISPLAY_HEIGHT  900
 
@@ -846,6 +846,7 @@ void readInputs()
             keys[ALT] = true;
             break;
         case ALLEGRO_KEY_ENTER:
+        case ALLEGRO_KEY_PAD_ENTER:
             keys[ENTER] = true;
             break;
         case ALLEGRO_KEY_BACKSPACE:
@@ -1047,6 +1048,7 @@ void readInputs()
             keys[ALT] = false;
             break;
         case ALLEGRO_KEY_ENTER:
+        case ALLEGRO_KEY_PAD_ENTER:
             keys[ENTER] = false;
             break;
         case ALLEGRO_KEY_BACKSPACE:
