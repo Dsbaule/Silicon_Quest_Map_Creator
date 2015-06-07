@@ -18,18 +18,20 @@
 //--------------------------------------------------
 
 // Definições da tela
-#define FULLSCREEN  1
+#define FULLSCREEN  0
 #define DISPLAY_WIDTH   1600
 #define DISPLAY_HEIGHT  900
 
 // Definições dos Timers
 #define FPS             60
 #define MOVEMENT_SPEED  300
+#define MOVEMENT_STEP   1
 #define MENU_SPEED      7
 
 // Definições de desenho
-#define SHOWMOUSE   1
-#define SHOW_BORDER 1
+#define SHOWMOUSE       1
+#define SHOW_BORDER     1
+#define SHOW_MAP_LIMITS 1
 
 // Definições do mapa
 #define MAX_COLUNAS 2500
@@ -38,6 +40,8 @@
 
 // Definições das cores
 #define COR_BORDAS  242, 210, 99
+//#define COR_BORDAS  255, 255, 255
+#define COR_LIMITS  255, 255, 255
 #define COR_AR      0, 0, 0
 #define COR_TERRA   94, 28, 13
 #define COR_PEDRA   53, 53, 53
@@ -115,8 +119,8 @@ char blocos[MAX_LINHAS][MAX_COLUNAS] = {{0}};
 struct matriz mouseBlock = {0};
 struct Posicao mapa = {0};
 
-int numColunas = 150;
-int numLinhas = 150;
+int numColunas = 25;
+int numLinhas = 25;
 
 int selectedBlock = 1;
 
@@ -188,7 +192,7 @@ int main()
     // Definição das variaveis de estado
     //--------------------------------------------------
     char selectedOption = 0;
-    int menu = 0;
+    int gameState = 0;
 
     //--------------------------------------------------
     // Definição das variaveis gerais
@@ -210,7 +214,7 @@ int main()
         if(keys[ESC])
             done = true;
 
-        if(menu == 0)
+        if(gameState == 0)
         {
             if(draw)
             {
@@ -244,7 +248,7 @@ int main()
                 {
                     done = selectedOption;
                     selectedOption = 0;
-                    menu = 1;
+                    gameState = 1;
                     readMenu = false;
                 }
             }
@@ -252,7 +256,7 @@ int main()
 
         }
 
-        if(menu == 1)
+        if(gameState == 1)
         {
             if(draw)
             {
@@ -357,28 +361,47 @@ int main()
 
                 if(keys[ENTER])
                 {
-                    menu = 2;
+                    gameState = 2;
                 }
             }
 
         }
 
-        if(menu == 2)
+
+        mapa.x = ((DISPLAY_WIDTH/2) - ((numColunas/2) * blockWidth));
+        mapa.y = ((DISPLAY_HEIGHT/2) - ((numLinhas/2) * blockHeight));
+
+        if(gameState == 2)
         {
             // READ MOUSE MOVEMENT (TO BLOCK LIMITS)
             if(mouse.x < 0)
                 mouse.x = 0;
             if(mouse.y < 0)
                 mouse.y = 0;
+
+            if(mouse.x < mapa.x)
+                mouse.x = mapa.x;
+            if(mouse.y < mapa.y)
+                mouse.y = mapa.y;
+
             if(mouse.x > DISPLAY_WIDTH)
                 mouse.x = DISPLAY_WIDTH;
             if(mouse.y > DISPLAY_HEIGHT)
                 mouse.y = DISPLAY_HEIGHT;
 
+            if(mouse.x >= (mapa.x + (numColunas * blockWidth)))
+                mouse.x = mapa.x + (numColunas * blockWidth) - 1;
+            if(mouse.y >= (mapa.y + (numLinhas * blockHeight)))
+                mouse.y = mapa.y + (numLinhas * blockHeight) - 1;
+            /*
             if(((mouse.x - mapa.x) / blockWidth) < numColunas)
                 mouseBlock.coluna = (mouse.x - mapa.x) / blockWidth;
             if(((mouse.y - mapa.y) / blockHeight) < numLinhas)
                 mouseBlock.linha = (mouse.y - mapa.y) / blockHeight;
+            */
+
+            mouseBlock.coluna = (mouse.x - mapa.x)/blockWidth;
+            mouseBlock.linha = (mouse.y - mapa.y)/blockHeight;
 
             // READ MOUSE WHEEL MOVEMENT
             if(mouse.z > mouseWheelBefore)
@@ -404,6 +427,16 @@ int main()
             if(movement)
             {
                 // READ MOVEMENT KEYS (WASD + ARROWS)
+                if((keys[LEFT] || keys[A]) && (mapa.x <= 0))
+                    mapa.x += MOVEMENT_STEP + (2 * keys[SHIFT]);
+                if((keys[RIGHT] || keys[D]) && ((mapa.x + (numColunas * blockWidth) >= DISPLAY_WIDTH)))
+                    mapa.x -= MOVEMENT_STEP + (2 * keys[SHIFT]);
+
+                if((keys[UP] || keys[W]) && (mapa.y <= 0))
+                    mapa.y += MOVEMENT_STEP + (2 * keys[SHIFT]);
+                if((keys[DOWN] || keys[S]) && ((mapa.y + (numLinhas * blockHeight) >= DISPLAY_HEIGHT)))
+                    mapa.y -= MOVEMENT_STEP + (2 * keys[SHIFT]);
+                /*
                 if(!(mapa.x >= 0))
                     mapa.x += (keys[LEFT] | keys[A]) * (1 + 2 * keys[SHIFT]);
                 if(!(mapa.y >= 0))
@@ -412,12 +445,13 @@ int main()
                     mapa.x -= (keys[RIGHT] | keys[D]) * (1 + 2 * keys[SHIFT]);
                 if(!(mapa.y <= ((-numLinhas * blockHeight) + DISPLAY_HEIGHT)))
                     mapa.y -= (keys[DOWN] | keys[S]) * (1 + 2 * keys[SHIFT]);
+                    */
 
                 movement = false;
             }
 
             if(keys[P])
-                menu = 3;
+                gameState = 3;
             if(draw)
             {
                 draw = false;
@@ -455,6 +489,8 @@ int main()
                 {
                     al_draw_rectangle(mapa.x + mouseBlock.coluna * blockWidth, mapa.y + mouseBlock.linha * blockHeight, mapa.x + (mouseBlock.coluna * blockWidth) + blockWidth, mapa.y + (mouseBlock.linha * blockHeight) + blockHeight, al_map_rgb(COR_BORDAS), 1);
                     al_draw_rectangle(1, 1, DISPLAY_WIDTH, DISPLAY_HEIGHT, al_map_rgb(COR_BORDAS), 1);
+                    if(SHOW_MAP_LIMITS)
+                        al_draw_rectangle(mapa.x, mapa.y, (mapa.x + (numColunas * blockWidth)), (mapa.y + (numLinhas * blockHeight)), al_map_rgb(COR_LIMITS), 1);
                 }
 
                 // DRAW SELECTED BLOCK PREVIEW
@@ -486,7 +522,7 @@ int main()
             }
         }
 
-        if(menu == 3)
+        if(gameState == 3)
         {
             if(draw)
             {
@@ -524,7 +560,7 @@ int main()
                 else if(keys[ENTER])
                 {
                     if(selectedOption == 0)
-                        menu = 2;
+                        gameState = 2;
                     else if(selectedOption == 1)
                         saveMap();
                     else
@@ -1042,22 +1078,26 @@ void saveMap()
     file = al_create_native_file_dialog("", "Choose File location and name", "*.txt",ALLEGRO_FILECHOOSER_MULTIPLE);
     al_show_native_file_dialog(display, file);
     char mapNameTxt[100] = "";
-    const char *mapName = al_get_native_file_dialog_path(file, 0);
 
-    strcpy(mapNameTxt, mapName);
-
-    if((mapNameTxt[strlen(mapNameTxt)-1] != 't')||(mapNameTxt[strlen(mapNameTxt)-2] != 'x')||(mapNameTxt[strlen(mapNameTxt)-3] != 't')||(mapNameTxt[strlen(mapNameTxt)-4] != '.'))
-        strcat(mapNameTxt, ".txt");
-
-    // SAVE MAP TO FILE
-    fp = fopen(mapNameTxt, "w");
-    fprintf(fp, "%d %d\n", numLinhas, numColunas);
-    for(i = 0; i < numLinhas; i++)
+    if(al_get_native_file_dialog_count(file) != 0)
     {
-        for(j = 0; j < numColunas; j++)
-            fprintf(fp, "%d ", blocos[i][j]);
-        fprintf(fp, "\n");
+        const char *mapName = al_get_native_file_dialog_path(file, 0);
+
+        strcpy(mapNameTxt, mapName);
+
+        if((mapNameTxt[strlen(mapNameTxt)-1] != 't')||(mapNameTxt[strlen(mapNameTxt)-2] != 'x')||(mapNameTxt[strlen(mapNameTxt)-3] != 't')||(mapNameTxt[strlen(mapNameTxt)-4] != '.'))
+            strcat(mapNameTxt, ".txt");
+
+        // SAVE MAP TO FILE
+        fp = fopen(mapNameTxt, "w");
+        fprintf(fp, "%d %d\n", numLinhas, numColunas);
+        for(i = 0; i < numLinhas; i++)
+        {
+            for(j = 0; j < numColunas; j++)
+                fprintf(fp, "%d ", blocos[i][j]);
+            fprintf(fp, "\n");
+        }
+        fclose(fp);
     }
-    fclose(fp);
 }
 
