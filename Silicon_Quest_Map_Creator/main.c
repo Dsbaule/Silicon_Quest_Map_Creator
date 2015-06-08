@@ -119,6 +119,7 @@ bool readMenu = false;
 char blocos[MAX_LINHAS][MAX_COLUNAS] = {{0}};
 struct matriz mouseBlock = {0};
 struct Posicao mapa = {0};
+struct Posicao jogador = {((DISPLAY_WIDTH/2)-50), ((DISPLAY_HEIGHT/2)-50), 0};
 
 int numColunas = 25;
 int numLinhas = 25;
@@ -131,6 +132,7 @@ int selectedBlock = 1;
 int checkEvents();
 void readInputs();
 void saveMap();
+int detectColisionLeft_Matriz(struct Posicao character, struct Posicao mapaPos, char *blockPos[]);
 
 int main()
 {
@@ -219,6 +221,10 @@ int main()
     // Definição das variaveis auxiliares
     //--------------------------------------------------
     int j, i;
+    bool colisionLeft   = 0;
+    bool colisionRight  = 0;
+    bool colisionUp     = 0;
+    bool colisionDown   = 0;
 
     //--------------------------------------------------
     // Loop para o jogo
@@ -536,7 +542,8 @@ int main()
             {
                 al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 100, 100, 0, "        CONTINUE");
                 al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 100, 125, 0, "        SAVE MAP");
-                al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 100, 150, 0, "        QUIT  ");
+                al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 100, 150, 0, "        TEST MAP");
+                al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 100, 175, 0, "        QUIT  ");
 
                 if(selectedOption == 0)
                 {
@@ -546,9 +553,13 @@ int main()
                 {
                     al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 100, 125, 0, ">                           <");
                 }
-                else
+                else if(selectedOption == 2)
                 {
                     al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 100, 150, 0, ">                           <");
+                }
+                else
+                {
+                    al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 100, 175, 0, ">                           <");
                 }
 
                 al_flip_display();
@@ -571,6 +582,8 @@ int main()
                         gameState = 2;
                     else if(selectedOption == 1)
                         saveMap();
+                    else if(selectedOption == 2)
+                        gameState = 4;
                     else
                         done = true;
                     selectedOption = 0;
@@ -579,11 +592,162 @@ int main()
                 else
                     readMenu = true;
 
-                if(selectedOption > 2)
+                if(selectedOption > 3)
                     selectedOption = 0;
 
                 if(selectedOption < 0)
-                    selectedOption = 2;
+                    selectedOption = 3;
+            }
+        }
+
+        if(gameState == 4)  // Gamestate de teste
+        {
+            colisionLeft = detectColisionLeft_Matriz(jogador, mapa, blocos);
+            colisionRight = detectColisionRight_Matriz(jogador, mapa, blocos);
+            colisionUp = detectColisionUp_Matriz(jogador, mapa, blocos);
+            colisionDown = detectColisionDown_Matriz(jogador, mapa, blocos);
+
+            // READ MOUSE MOVEMENT (TO BLOCK LIMITS)
+            if(mouse.x < 0)
+                mouse.x = 0;
+            if(mouse.y < 0)
+                mouse.y = 0;
+
+            if(mouse.x < mapa.x)
+                mouse.x = mapa.x;
+            if(mouse.y < mapa.y)
+                mouse.y = mapa.y;
+
+            if(mouse.x > DISPLAY_WIDTH)
+                mouse.x = DISPLAY_WIDTH;
+            if(mouse.y > DISPLAY_HEIGHT)
+                mouse.y = DISPLAY_HEIGHT;
+
+            if(mouse.x >= (mapa.x + (numColunas * blockWidth)))
+                mouse.x = mapa.x + (numColunas * blockWidth) - 1;
+            if(mouse.y >= (mapa.y + (numLinhas * blockHeight)))
+                mouse.y = mapa.y + (numLinhas * blockHeight) - 1;
+
+            mouseBlock.coluna = (mouse.x - mapa.x)/blockWidth;
+            mouseBlock.linha = (mouse.y - mapa.y)/blockHeight;
+
+            // READ MOUSE WHEEL MOVEMENT
+            if(mouse.z > mouseWheelBefore)
+            {
+                mouseWheelBefore = mouse.z;
+                selectedBlock++;
+                if(selectedBlock >= NUM_BLOCOS)
+                    selectedBlock = 1;
+            }
+            else if(mouse.z < mouseWheelBefore)
+            {
+                mouseWheelBefore = mouse.z;
+                selectedBlock--;
+                if(selectedBlock < 1)
+                    selectedBlock = NUM_BLOCOS - 1;
+            }
+
+            if(keys[MOUSE_1])
+                blocos[mouseBlock.linha][mouseBlock.coluna] = selectedBlock;
+            if(keys[MOUSE_2])
+                blocos[mouseBlock.linha][mouseBlock.coluna] = 0;
+
+            if(movement)
+            {
+                // READ MOVEMENT KEYS (WASD + ARROWS)
+                if((keys[LEFT] || keys[A]) && (mapa.x < 0) && (!colisionLeft))
+                    mapa.x += MOVEMENT_STEP + (2 * keys[SHIFT]);
+                if((keys[RIGHT] || keys[D]) && (((mapa.x + (numColunas * blockWidth)) > DISPLAY_WIDTH)) && (!colisionRight))
+                    mapa.x -= MOVEMENT_STEP + (2 * keys[SHIFT]);
+
+                if((keys[UP] || keys[W]) && (mapa.y < 0) && (!colisionUp))
+                    mapa.y += MOVEMENT_STEP + (2 * keys[SHIFT]);
+                if((keys[DOWN] || keys[S]) && (((mapa.y + (numLinhas * blockHeight)) > DISPLAY_HEIGHT)) && (!colisionDown))
+                    mapa.y -= MOVEMENT_STEP + (2 * keys[SHIFT]);
+
+                if(keys[UP])
+                    mapa.y += 10;
+
+                movement = false;
+            }
+
+            if(keys[P])
+                gameState = 3;
+            if(draw)
+            {
+                draw = false;
+                for(i = 0; i < numLinhas; i++)
+                {
+                    for(j = 0; j < numColunas; j++)
+                        if(((mapa.x + (j * blockWidth) + blockWidth) >= 0)&&((mapa.y + (i * blockHeight) + blockHeight)>= 0)&&((mapa.x + j * blockWidth) < DISPLAY_WIDTH)&&((mapa.y + i * blockHeight) < DISPLAY_HEIGHT))
+                        {
+                            switch(blocos[i][j])
+                            {
+                            case 0: // AR
+                                al_draw_filled_rectangle(mapa.x + j * blockWidth, mapa.y + i * blockHeight, mapa.x + (j * blockWidth) + blockWidth, mapa.y + (i * blockHeight) + blockHeight, al_map_rgb(COR_AR));
+                                break;
+                            case 1: // TERRA
+                                if(blocos[i-1][j] == 0)
+                                    al_draw_scaled_bitmap(blocoGrama, 0, 0, source.x, source.y, mapa.x + j * blockWidth, mapa.y + i * blockHeight, blockWidth, blockHeight, 0);
+                                else
+                                    al_draw_scaled_bitmap(blocoTerra, 0, 0, source.x, source.y, mapa.x + j * blockWidth, mapa.y + i * blockHeight, blockWidth, blockHeight, 0);
+                                break;
+                            case 2: // PEDRA
+                                al_draw_scaled_bitmap(blocoPedra, 0, 0, source.x, source.y, mapa.x + j * blockWidth, mapa.y + i * blockHeight, blockWidth, blockHeight, 0);
+                                break;
+                            case 3: // SILICIO
+                                al_draw_scaled_bitmap(blocoSilicio, 0, 0, source.x, source.y, mapa.x + j * blockWidth, mapa.y + i * blockHeight, blockWidth, blockHeight, 0);
+                                break;
+                            case 4: // LAVA
+                                al_draw_scaled_bitmap(blocoLava, 0, 0, source.x, source.y, mapa.x + j * blockWidth, mapa.y + i * blockHeight, blockWidth, blockHeight, 0);
+                                break;
+                            case 5: // AGUA
+                                al_draw_scaled_bitmap(blocoAgua, 0, 0, source.x, source.y, mapa.x + j * blockWidth, mapa.y + i * blockHeight, blockWidth, blockHeight, 0);
+                                break;
+                            }
+                        }
+                }
+
+                al_draw_filled_rectangle(jogador.x, jogador.y, jogador.x + blockWidth, jogador.y + blockHeight, al_map_rgb(COR_LIMITS));
+
+                // DRAW BORDERS
+                if(SHOW_BORDER)
+                {
+                    al_draw_rectangle(mapa.x + mouseBlock.coluna * blockWidth, mapa.y + mouseBlock.linha * blockHeight, mapa.x + (mouseBlock.coluna * blockWidth) + blockWidth, mapa.y + (mouseBlock.linha * blockHeight) + blockHeight, al_map_rgb(COR_BORDAS), 1);
+                    al_draw_rectangle(1, 1, DISPLAY_WIDTH, DISPLAY_HEIGHT, al_map_rgb(COR_BORDAS), 1);
+                    if(SHOW_MAP_LIMITS)
+                        al_draw_rectangle(mapa.x, mapa.y, (mapa.x + (numColunas * blockWidth)), (mapa.y + (numLinhas * blockHeight)), al_map_rgb(COR_LIMITS), 1);
+                }
+
+                // DRAW SELECTED BLOCK PREVIEW
+                switch(selectedBlock)
+                {
+                case 1: // TERRA
+                    if(blocos[i-1][j] == 0)
+                        al_draw_scaled_bitmap(blocoGrama, 0, 0, source.x, source.y, DISPLAY_WIDTH - (10 + blockWidth), 10, blockWidth, blockHeight, 0);
+                    else
+                        al_draw_scaled_bitmap(blocoTerra, 0, 0, source.x, source.y, DISPLAY_WIDTH - (10 + blockWidth), 10, blockWidth, blockHeight, 0);
+                    break;
+                case 2: // PEDRA
+                    al_draw_scaled_bitmap(blocoPedra, 0, 0, source.x, source.y, DISPLAY_WIDTH - (10 + blockWidth), 10, blockWidth, blockHeight, 0);
+                    break;
+                case 3: // SILICIO
+                    al_draw_scaled_bitmap(blocoSilicio, 0, 0, source.x, source.y, DISPLAY_WIDTH - (10 + blockWidth), 10, blockWidth, blockHeight, 0);
+                    break;
+                case 4: // LAVA
+                    al_draw_scaled_bitmap(blocoLava, 0, 0, source.x, source.y, DISPLAY_WIDTH - (10 + blockWidth), 10, blockWidth, blockHeight, 0);
+                    break;
+                case 5: // AGUA
+                    al_draw_scaled_bitmap(blocoAgua, 0, 0, source.x, source.y, DISPLAY_WIDTH - (10 + blockWidth), 10, blockWidth, blockHeight, 0);
+                    break;
+                }
+
+                if(SHOW_BORDER)
+                    al_draw_rectangle(DISPLAY_WIDTH - (10 + blockWidth), 10, DISPLAY_WIDTH - 10, 10 + blockHeight, al_map_rgb(COR_BORDAS), 1);
+
+                //FLIP BUFFERS========================
+                al_flip_display();
+                al_clear_to_color(al_map_rgb(0,0,0));
             }
         }
 
@@ -1114,3 +1278,146 @@ void saveMap()
     }
 }
 
+int detectColisionLeft_Matriz(struct Posicao character, struct Posicao mapaPos, char *blockPos[])
+{
+    int i, j;
+    bool result = 0;
+
+    for(i = 0; i < numLinhas; i++)
+    {
+        for(j = 0; j < numColunas; j++)
+            if(((mapaPos.x + (j * blockWidth) + blockWidth) >= 0)&&((mapaPos.y + (i * blockHeight) + blockHeight)>= 0)&&((mapaPos.x + j * blockWidth) < DISPLAY_WIDTH)&&((mapaPos.y + i * blockHeight) < DISPLAY_HEIGHT))
+            {
+                if((character.x == (mapaPos.x + ((1 + j) * blockWidth) + 1))
+                        && ((((character.y) >= (mapaPos.y + (i * blockHeight)))&& ((character.y) <= (mapaPos.y + ((i + 1) * blockHeight))))
+                            || ((character.y + blockHeight) >= (mapaPos.y + (i * blockHeight)) && ((character.y + blockHeight) <= (mapaPos.y + ((i + 1) * blockHeight))))))
+
+                {
+                    switch(blocos[i][j])
+                    {
+                    case 0: // AR
+                        result |= 0;
+                        break;
+                    case 1: // TERRA
+                    case 2: // PEDRA
+                    case 3: // SILICIO
+                        result |= 1;
+                        break;
+                    case 4: // LAVA
+                    case 5: // AGUA
+                        result |= 0;
+                        break;
+                    }
+                }
+            }
+    }
+    return result;
+}
+
+int detectColisionRight_Matriz(struct Posicao character, struct Posicao mapaPos, char *blockPos[])
+{
+    int i, j;
+    bool result = 0;
+
+    for(i = 0; i < numLinhas; i++)
+    {
+        for(j = 0; j < numColunas; j++)
+            if(((mapaPos.x + (j * blockWidth) + blockWidth) >= 0)&&((mapaPos.y + (i * blockHeight) + blockHeight)>= 0)&&((mapaPos.x + j * blockWidth) < DISPLAY_WIDTH)&&((mapaPos.y + i * blockHeight) < DISPLAY_HEIGHT))
+            {
+                if(((character.x + blockWidth) == (mapaPos.x + (j * blockWidth) - 1))
+                        && ((((character.y) >= (mapaPos.y + (i * blockHeight)))&& ((character.y) <= (mapaPos.y + ((i + 1) * blockHeight))))
+                            || ((character.y + blockHeight) >= (mapaPos.y + (i * blockHeight)) && ((character.y + blockHeight) <= (mapaPos.y + ((i + 1) * blockHeight))))))
+
+                {
+                    switch(blocos[i][j])
+                    {
+                    case 0: // AR
+                        result |= 0;
+                        break;
+                    case 1: // TERRA
+                    case 2: // PEDRA
+                    case 3: // SILICIO
+                        result |= 1;
+                        break;
+                    case 4: // LAVA
+                    case 5: // AGUA
+                        result |= 0;
+                        break;
+                    }
+                }
+            }
+    }
+    return result;
+}
+
+int detectColisionUp_Matriz(struct Posicao character, struct Posicao mapaPos, char *blockPos[])
+{
+    int i, j;
+    bool result = 0;
+
+    for(i = 0; i < numLinhas; i++)
+    {
+        for(j = 0; j < numColunas; j++)
+            if(((mapaPos.x + (j * blockWidth) + blockWidth) >= 0)&&((mapaPos.y + (i * blockHeight) + blockHeight)>= 0)&&((mapaPos.x + j * blockWidth) < DISPLAY_WIDTH)&&((mapaPos.y + i * blockHeight) < DISPLAY_HEIGHT))
+            {
+                if((character.y == (mapaPos.y + ((i + 1) * blockWidth) + 1))
+                        && ((((character.x) >= (mapaPos.x + (j * blockHeight)))&& ((character.x) <= (mapaPos.x + ((j + 1) * blockHeight))))
+                            || ((character.x + blockHeight) >= (mapaPos.x + (j * blockHeight)) && ((character.x + blockHeight) <= (mapaPos.x + ((j + 1) * blockHeight))))))
+
+                {
+                    switch(blocos[i][j])
+                    {
+                    case 0: // AR
+                        result |= 0;
+                        break;
+                    case 1: // TERRA
+                    case 2: // PEDRA
+                    case 3: // SILICIO
+                        result |= 1;
+                        break;
+                    case 4: // LAVA
+                    case 5: // AGUA
+                        result |= 0;
+                        break;
+                    }
+                }
+            }
+    }
+    return result;
+}
+
+int detectColisionDown_Matriz(struct Posicao character, struct Posicao mapaPos, char *blockPos[])
+{
+    int i, j;
+    bool result = 0;
+
+    for(i = 0; i < numLinhas; i++)
+    {
+        for(j = 0; j < numColunas; j++)
+            if(((mapaPos.x + (j * blockWidth) + blockWidth) >= 0)&&((mapaPos.y + (i * blockHeight) + blockHeight)>= 0)&&((mapaPos.x + j * blockWidth) < DISPLAY_WIDTH)&&((mapaPos.y + i * blockHeight) < DISPLAY_HEIGHT))
+            {
+                if(((character.y + blockHeight) == (mapaPos.y + (i * blockWidth) - 1))
+                        && ((((character.x) >= (mapaPos.x + (j * blockHeight)))&& ((character.x) <= (mapaPos.x + ((j + 1) * blockHeight))))
+                            || ((character.x + blockHeight) >= (mapaPos.x + (j * blockHeight)) && ((character.x + blockHeight) <= (mapaPos.x + ((j + 1) * blockHeight))))))
+
+                {
+                    switch(blocos[i][j])
+                    {
+                    case 0: // AR
+                        result |= 0;
+                        break;
+                    case 1: // TERRA
+                    case 2: // PEDRA
+                    case 3: // SILICIO
+                        result |= 1;
+                        break;
+                    case 4: // LAVA
+                    case 5: // AGUA
+                        result |= 0;
+                        break;
+                    }
+                }
+            }
+    }
+    return result;
+}
