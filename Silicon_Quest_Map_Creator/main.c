@@ -26,6 +26,7 @@
 // Definições dos Timers
 #define FPS             60
 #define MOVEMENT_SPEED  300
+#define BOOST_SPEED     1000
 #define MOVEMENT_STEP   1
 #define MENU_SPEED      7
 
@@ -38,6 +39,11 @@
 #define MAX_COLUNAS 2500
 #define MAX_LINHAS  2500
 #define NUM_BLOCOS  6
+#define GRAVITY     1
+
+// Definições dos Objetos
+#define CHARACTER_WIDTH     50
+#define CHARACTER_HEIGHT    100
 
 // Definições das cores
 #define COR_BORDAS  242, 210, 99
@@ -55,6 +61,7 @@
 //--------------------------------------------------
 ALLEGRO_TIMER *drawTimer = NULL;
 ALLEGRO_TIMER *movementTimer = NULL;
+ALLEGRO_TIMER *movementBoostTimer = NULL;
 ALLEGRO_TIMER *menuTimer = NULL;
 
 ALLEGRO_EVENT_QUEUE *event_queue = NULL;
@@ -75,6 +82,8 @@ struct Objeto
 {
     int     x;
     int     y;
+    int     width;
+    int     height;
     float   force;
     bool    jump;
 };
@@ -111,6 +120,7 @@ int mouseWheelBefore = 0;
 bool done = false;
 bool draw = false;
 bool movement = false;
+bool movementBoost = false;
 bool readMenu = false;
 
 //--------------------------------------------------
@@ -119,10 +129,10 @@ bool readMenu = false;
 char blocos[MAX_LINHAS][MAX_COLUNAS] = {{0}};
 struct matriz mouseBlock = {0};
 struct Posicao mapa = {0};
-struct Posicao jogador = {((DISPLAY_WIDTH/2)-50), ((DISPLAY_HEIGHT/2)-50), 0};
+struct Objeto jogador = {((DISPLAY_WIDTH/2)-50), ((DISPLAY_HEIGHT/2)-50), CHARACTER_WIDTH - 2, CHARACTER_HEIGHT - 2, 0, 0};
 
-int numColunas = 25;
-int numLinhas = 25;
+int numColunas = 100;
+int numLinhas = 100;
 
 int selectedBlock = 1;
 
@@ -132,7 +142,11 @@ int selectedBlock = 1;
 int checkEvents();
 void readInputs();
 void saveMap();
-int detectColisionLeft_Matriz(struct Posicao character, struct Posicao mapaPos, char *blockPos[]);
+int detectColisionRight_Matriz(struct Objeto character, struct Posicao mapaPos, char blockPos[numLinhas][numColunas]);
+int detectColisionLeft_Matriz(struct Objeto character, struct Posicao mapaPos, char blockPos[numLinhas][numColunas]);
+int detectColisionUp_Matriz(struct Objeto character, struct Posicao mapaPos, char blockPos[numLinhas][numColunas]);
+int detectColisionDown_Matriz(struct Objeto character, struct Posicao mapaPos, char blockPos[numLinhas][numColunas]);
+
 
 int main()
 {
@@ -175,6 +189,7 @@ int main()
     // Setup dos Timers
     drawTimer = al_create_timer(1.0 / FPS);
     movementTimer = al_create_timer(1.0 / MOVEMENT_SPEED);
+    movementBoostTimer = al_create_timer(1.0 / BOOST_SPEED);
     menuTimer = al_create_timer(1.0 / MENU_SPEED);
 
 
@@ -185,11 +200,13 @@ int main()
     al_register_event_source(event_queue, al_get_display_event_source(display));
     al_register_event_source(event_queue, al_get_timer_event_source(drawTimer));
     al_register_event_source(event_queue, al_get_timer_event_source(movementTimer));
+    al_register_event_source(event_queue, al_get_timer_event_source(movementBoostTimer));
     al_register_event_source(event_queue, al_get_timer_event_source(menuTimer));
 
     // Inicialização dos Timers
     al_start_timer(drawTimer);
     al_start_timer(movementTimer);
+    al_start_timer(movementBoostTimer);
     al_start_timer(menuTimer);
 
     //--------------------------------------------------
@@ -452,9 +469,6 @@ int main()
                 if((keys[DOWN] || keys[S]) && (((mapa.y + (numLinhas * blockHeight)) > DISPLAY_HEIGHT)))
                     mapa.y -= MOVEMENT_STEP + (2 * keys[SHIFT]);
 
-                if(keys[UP])
-                    mapa.y += 10;
-
                 movement = false;
             }
 
@@ -652,23 +666,75 @@ int main()
             if(keys[MOUSE_2])
                 blocos[mouseBlock.linha][mouseBlock.coluna] = 0;
 
-            if(movement)
+            if((movement && !keys[SHIFT])||(movementBoost && keys[SHIFT]))
             {
-                // READ MOVEMENT KEYS (WASD + ARROWS)
-                if((keys[LEFT] || keys[A]) && (mapa.x < 0) && (!colisionLeft))
-                    mapa.x += MOVEMENT_STEP + (2 * keys[SHIFT]);
-                if((keys[RIGHT] || keys[D]) && (((mapa.x + (numColunas * blockWidth)) > DISPLAY_WIDTH)) && (!colisionRight))
-                    mapa.x -= MOVEMENT_STEP + (2 * keys[SHIFT]);
+                if((keys[LEFT] || keys[A])&& (!colisionLeft))
+                {
+                    if(mapa.x < 0)
+                        mapa.x += MOVEMENT_STEP;
+                    else if((jogador.x > 0) && (jogador.x > mapa.x))
+                        jogador.x -= MOVEMENT_STEP;
+                }
 
-                if((keys[UP] || keys[W]) && (mapa.y < 0) && (!colisionUp))
-                    mapa.y += MOVEMENT_STEP + (2 * keys[SHIFT]);
-                if((keys[DOWN] || keys[S]) && (((mapa.y + (numLinhas * blockHeight)) > DISPLAY_HEIGHT)) && (!colisionDown))
-                    mapa.y -= MOVEMENT_STEP + (2 * keys[SHIFT]);
+                if((keys[RIGHT] || keys[D]) && (!colisionRight))
+                {
+                    if((mapa.x + (numColunas * blockWidth)) > DISPLAY_WIDTH)
+                        mapa.x -= MOVEMENT_STEP;
+                    else if(((jogador.x + blockWidth) < DISPLAY_WIDTH) && ((jogador.x + blockWidth) < (mapa.x + (numColunas * blockWidth))))
+                        jogador.x += MOVEMENT_STEP;
+                }
 
-                if(keys[UP])
-                    mapa.y += 10;
+                jogador.jump = !colisionDown;
+
+                if((keys[UP] || keys[W]) && (!colisionUp) && !jogador.jump)
+                {
+                    jogador.jump = true;
+                    jogador.force = 120;
+                    /*
+                    if(mapa.y < 0)
+                    mapa.y += MOVEMENT_STEP;
+                    else if((jogador.y > 0) && (jogador.y > mapa.y))
+                    jogador.y -= MOVEMENT_STEP;
+                    */
+                }
+
+                if(jogador.jump)
+                {
+
+                    if((mapa.y < 0) && (mapa.y + (numLinhas * blockHeight)))
+                        mapa.y += (jogador.force/10);
+                    else if(((jogador.y > 0) && (jogador.y > mapa.y)) && (((jogador.y + blockHeight) < DISPLAY_HEIGHT) && ((jogador.y + blockHeight) < (mapa.y + (numLinhas * blockHeight)))))
+                        jogador.y -= (jogador.force/10);
+
+                    if(mapa.y >= 0)
+                        mapa.y = -1;
+
+                    if(jogador.y <= 0)
+                        jogador.y = 1;
+
+                    if(mapa.x >= 0)
+                        mapa.x = -1;
+
+                    if(jogador.x <= 0)
+                        jogador.x = 1;
+
+                    jogador.force -= GRAVITY;
+                }
+
+                if(jogador.force < -120)
+                    jogador.force = -120;
+
+                if((keys[DOWN] || keys[S]) && (!colisionDown))
+                {
+                    if((mapa.y + (numLinhas * blockHeight)) > DISPLAY_HEIGHT)
+                        mapa.y -= MOVEMENT_STEP;
+                    else if(((jogador.y + blockHeight) < DISPLAY_HEIGHT) && ((jogador.y + blockHeight) < (mapa.y + (numLinhas * blockHeight))))
+                        jogador.y += MOVEMENT_STEP;
+                }
+
 
                 movement = false;
+                movementBoost = false;
             }
 
             if(keys[P])
@@ -708,7 +774,7 @@ int main()
                         }
                 }
 
-                al_draw_filled_rectangle(jogador.x, jogador.y, jogador.x + blockWidth, jogador.y + blockHeight, al_map_rgb(COR_LIMITS));
+                al_draw_filled_rectangle(jogador.x, jogador.y, jogador.x + jogador.width, jogador.y + jogador.height, al_map_rgb(COR_LIMITS));
 
                 // DRAW BORDERS
                 if(SHOW_BORDER)
@@ -770,6 +836,7 @@ int main()
     al_destroy_event_queue(event_queue);
     al_destroy_timer(drawTimer);
     al_destroy_timer(movementTimer);
+    al_destroy_timer(movementBoostTimer);
     al_destroy_timer(menuTimer);
     al_destroy_display(display);
 
@@ -792,6 +859,8 @@ int checkEvents()
             draw = true;
         else if(ev.timer.source == movementTimer)
             movement = true;
+        else if(ev.timer.source == movementBoostTimer)
+            movementBoost = true;
         else if(ev.timer.source == menuTimer)
         {
             al_stop_timer(menuTimer);
@@ -1278,7 +1347,7 @@ void saveMap()
     }
 }
 
-int detectColisionLeft_Matriz(struct Posicao character, struct Posicao mapaPos, char *blockPos[])
+int detectColisionLeft_Matriz(struct Objeto character, struct Posicao mapaPos, char blockPos[numLinhas][numColunas])
 {
     int i, j;
     bool result = 0;
@@ -1290,7 +1359,8 @@ int detectColisionLeft_Matriz(struct Posicao character, struct Posicao mapaPos, 
             {
                 if((character.x == (mapaPos.x + ((1 + j) * blockWidth) + 1))
                         && ((((character.y) >= (mapaPos.y + (i * blockHeight)))&& ((character.y) <= (mapaPos.y + ((i + 1) * blockHeight))))
-                            || ((character.y + blockHeight) >= (mapaPos.y + (i * blockHeight)) && ((character.y + blockHeight) <= (mapaPos.y + ((i + 1) * blockHeight))))))
+                            || ((character.y + character.height) >= (mapaPos.y + (i * blockHeight)) && ((character.y + character.height) <= (mapaPos.y + ((i + 1) * blockHeight))))
+                            || ((character.y < (mapaPos.y + (i * blockHeight))) && ((character.y + character.height) > (mapaPos.y + ((i + 1) * blockHeight))))))
 
                 {
                     switch(blocos[i][j])
@@ -1314,7 +1384,7 @@ int detectColisionLeft_Matriz(struct Posicao character, struct Posicao mapaPos, 
     return result;
 }
 
-int detectColisionRight_Matriz(struct Posicao character, struct Posicao mapaPos, char *blockPos[])
+int detectColisionRight_Matriz(struct Objeto character, struct Posicao mapaPos, char blockPos[numLinhas][numColunas])
 {
     int i, j;
     bool result = 0;
@@ -1324,9 +1394,10 @@ int detectColisionRight_Matriz(struct Posicao character, struct Posicao mapaPos,
         for(j = 0; j < numColunas; j++)
             if(((mapaPos.x + (j * blockWidth) + blockWidth) >= 0)&&((mapaPos.y + (i * blockHeight) + blockHeight)>= 0)&&((mapaPos.x + j * blockWidth) < DISPLAY_WIDTH)&&((mapaPos.y + i * blockHeight) < DISPLAY_HEIGHT))
             {
-                if(((character.x + blockWidth) == (mapaPos.x + (j * blockWidth) - 1))
+                if(((character.x + character.width) == (mapaPos.x + (j * blockWidth) - 1))
                         && ((((character.y) >= (mapaPos.y + (i * blockHeight)))&& ((character.y) <= (mapaPos.y + ((i + 1) * blockHeight))))
-                            || ((character.y + blockHeight) >= (mapaPos.y + (i * blockHeight)) && ((character.y + blockHeight) <= (mapaPos.y + ((i + 1) * blockHeight))))))
+                            || ((character.y + character.height) >= (mapaPos.y + (i * blockHeight)) && ((character.y + character.height) <= (mapaPos.y + ((i + 1) * blockHeight))))
+                            || ((character.y < (mapaPos.y + (i * blockHeight))) && ((character.y + character.height) > (mapaPos.y + ((i + 1) * blockHeight))))))
 
                 {
                     switch(blocos[i][j])
@@ -1350,7 +1421,7 @@ int detectColisionRight_Matriz(struct Posicao character, struct Posicao mapaPos,
     return result;
 }
 
-int detectColisionUp_Matriz(struct Posicao character, struct Posicao mapaPos, char *blockPos[])
+int detectColisionUp_Matriz(struct Objeto character, struct Posicao mapaPos, char blockPos[numLinhas][numColunas])
 {
     int i, j;
     bool result = 0;
@@ -1360,9 +1431,10 @@ int detectColisionUp_Matriz(struct Posicao character, struct Posicao mapaPos, ch
         for(j = 0; j < numColunas; j++)
             if(((mapaPos.x + (j * blockWidth) + blockWidth) >= 0)&&((mapaPos.y + (i * blockHeight) + blockHeight)>= 0)&&((mapaPos.x + j * blockWidth) < DISPLAY_WIDTH)&&((mapaPos.y + i * blockHeight) < DISPLAY_HEIGHT))
             {
-                if((character.y == (mapaPos.y + ((i + 1) * blockWidth) + 1))
-                        && ((((character.x) >= (mapaPos.x + (j * blockHeight)))&& ((character.x) <= (mapaPos.x + ((j + 1) * blockHeight))))
-                            || ((character.x + blockHeight) >= (mapaPos.x + (j * blockHeight)) && ((character.x + blockHeight) <= (mapaPos.x + ((j + 1) * blockHeight))))))
+                if((character.y == (mapaPos.y + ((i + 1) * blockHeight) + 1))
+                        && ((((character.x) >= (mapaPos.x + (j * blockWidth)))&& ((character.x) <= (mapaPos.x + ((j + 1) * blockWidth))))
+                            || ((character.x + character.width) >= (mapaPos.x + (j * blockWidth)) && ((character.x + character.width) <= (mapaPos.x + ((j + 1) * blockWidth))))
+                            || ((character.x < (mapaPos.x + (j * blockWidth))) && ((character.x + character.width) > (mapaPos.x + ((j + 1) * blockWidth))))))
 
                 {
                     switch(blocos[i][j])
@@ -1386,7 +1458,7 @@ int detectColisionUp_Matriz(struct Posicao character, struct Posicao mapaPos, ch
     return result;
 }
 
-int detectColisionDown_Matriz(struct Posicao character, struct Posicao mapaPos, char *blockPos[])
+int detectColisionDown_Matriz(struct Objeto character, struct Posicao mapaPos, char blockPos[numLinhas][numColunas])
 {
     int i, j;
     bool result = 0;
@@ -1394,30 +1466,36 @@ int detectColisionDown_Matriz(struct Posicao character, struct Posicao mapaPos, 
     for(i = 0; i < numLinhas; i++)
     {
         for(j = 0; j < numColunas; j++)
-            if(((mapaPos.x + (j * blockWidth) + blockWidth) >= 0)&&((mapaPos.y + (i * blockHeight) + blockHeight)>= 0)&&((mapaPos.x + j * blockWidth) < DISPLAY_WIDTH)&&((mapaPos.y + i * blockHeight) < DISPLAY_HEIGHT))
+            if(((mapaPos.x + (j * blockWidth) + blockWidth) >= 0)&& ((mapaPos.y + (i * blockHeight) + blockHeight)>= 0) && ((mapaPos.x + j * blockWidth) < DISPLAY_WIDTH) &&((mapaPos.y + i * blockHeight) < DISPLAY_HEIGHT))
             {
-                if(((character.y + blockHeight) == (mapaPos.y + (i * blockWidth) - 1))
-                        && ((((character.x) >= (mapaPos.x + (j * blockHeight)))&& ((character.x) <= (mapaPos.x + ((j + 1) * blockHeight))))
-                            || ((character.x + blockHeight) >= (mapaPos.x + (j * blockHeight)) && ((character.x + blockHeight) <= (mapaPos.x + ((j + 1) * blockHeight))))))
-
+                if(((character.y + character.height) >= (mapaPos.y + (i * blockHeight))) && ((character.y + character.height) <= (mapaPos.y + ((i + 1) * blockHeight))))
                 {
-                    switch(blocos[i][j])
+                    if((((character.x) >= (mapaPos.x + (j * blockWidth)))&& ((character.x) <= (mapaPos.x + ((j + 1) * blockWidth))))
+                            || ((character.x + character.width) >= (mapaPos.x + (j * blockWidth)) && ((character.x + character.width) <= (mapaPos.x + ((j + 1) * blockWidth))))
+                            || ((character.x < (mapaPos.x + (j * blockWidth))) && ((character.x + character.width) > (mapaPos.x + ((j + 1) * blockWidth)))))
+
                     {
-                    case 0: // AR
-                        result |= 0;
-                        break;
-                    case 1: // TERRA
-                    case 2: // PEDRA
-                    case 3: // SILICIO
-                        result |= 1;
-                        break;
-                    case 4: // LAVA
-                    case 5: // AGUA
-                        result |= 0;
-                        break;
+                        switch(blocos[i][j])
+                        {
+                        case 0: // AR
+                            result |= 0;
+                            break;
+                        case 1: // TERRA
+                        case 2: // PEDRA
+                        case 3: // SILICIO
+                            result |= 1;
+                            break;
+                        case 4: // LAVA
+                        case 5: // AGUA
+                            result |= 0;
+                            break;
+                        }
                     }
                 }
             }
     }
+    if((character.y + character.height) >= (mapa.y + (numColunas * blockHeight) - 1))
+        result |= 1;
+
     return result;
 }
