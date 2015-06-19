@@ -25,7 +25,7 @@
 
 // Definições dos Timers
 #define FPS             60
-#define MOVEMENT_SPEED  300
+#define MOVEMENT_SPEED  500
 #define BOOST_SPEED     1000
 #define MOVEMENT_STEP   1
 #define MENU_SPEED      7
@@ -39,7 +39,7 @@
 #define MAX_COLUNAS 2500
 #define MAX_LINHAS  2500
 #define NUM_BLOCOS  6
-#define GRAVITY     1
+#define GRAVITY     0.1
 
 // Definições dos Objetos
 #define CHARACTER_WIDTH     50
@@ -668,80 +668,68 @@ int main()
 
             if((movement && !keys[SHIFT])||(movementBoost && keys[SHIFT]))
             {
-                if((keys[LEFT] || keys[A])&& (!colisionLeft))
-                {
-                    if(mapa.x < 0)
-                        mapa.x += MOVEMENT_STEP;
-                    else if((jogador.x > 0) && (jogador.x > mapa.x))
-                        jogador.x -= MOVEMENT_STEP;
-                }
-
-                if((keys[RIGHT] || keys[D]) && (!colisionRight))
-                {
-                    if((mapa.x + (numColunas * blockWidth)) > DISPLAY_WIDTH)
-                        mapa.x -= MOVEMENT_STEP;
-                    else if(((jogador.x + blockWidth) < DISPLAY_WIDTH) && ((jogador.x + blockWidth) < (mapa.x + (numColunas * blockWidth))))
-                        jogador.x += MOVEMENT_STEP;
-                }
-
-                jogador.jump = !colisionDown;
-
-                if((keys[UP] || keys[W]) && (!colisionUp) && !jogador.jump)
+                if((keys[W] || keys[UP]) && (colisionUp == 0) && (jogador.y > 0))
                 {
                     jogador.jump = true;
-                    jogador.force = 120;
-                    /*
-                    if(mapa.y < 0)
-                    mapa.y += MOVEMENT_STEP;
-                    else if((jogador.y > 0) && (jogador.y > mapa.y))
-                    jogador.y -= MOVEMENT_STEP;
-                    */
+                    jogador.force = 2;
                 }
-
-                if(jogador.jump)
-                {
-
-                    if((mapa.y < 0) && (mapa.y + (numLinhas * blockHeight)))
-                        mapa.y += (jogador.force/10);
-                    else if(((jogador.y > 0) && (jogador.y > mapa.y)) && (((jogador.y + blockHeight) < DISPLAY_HEIGHT) && ((jogador.y + blockHeight) < (mapa.y + (numLinhas * blockHeight)))))
-                        jogador.y -= (jogador.force/10);
-
-                    if(mapa.y >= 0)
-                        mapa.y = -1;
-
-                    if(jogador.y <= 0)
-                        jogador.y = 1;
-
-                    if(mapa.x >= 0)
-                        mapa.x = -1;
-
-                    if(jogador.x <= 0)
-                        jogador.x = 1;
-
-                    jogador.force -= GRAVITY;
-                }
-
-                if(jogador.force < -120)
-                    jogador.force = -120;
-
-                if((keys[DOWN] || keys[S]) && (!colisionDown))
-                {
-                    if((mapa.y + (numLinhas * blockHeight)) > DISPLAY_HEIGHT)
-                        mapa.y -= MOVEMENT_STEP;
-                    else if(((jogador.y + blockHeight) < DISPLAY_HEIGHT) && ((jogador.y + blockHeight) < (mapa.y + (numLinhas * blockHeight))))
-                        jogador.y += MOVEMENT_STEP;
-                }
-
-
-                movement = false;
-                movementBoost = false;
+                //jogador.y -= MOVEMENT_STEP;
+                if((keys[S] || keys[DOWN]) && (colisionDown == 0) && ((jogador.y + jogador.height) < DISPLAY_HEIGHT))
+                    jogador.y += MOVEMENT_STEP;
+                if((keys[A] || keys[LEFT]) && (colisionLeft == 0) && (jogador.x > 0))
+                    jogador.x -= MOVEMENT_STEP;
+                if((keys[D] || keys[RIGHT]) && (colisionRight == 0) && ((jogador.x + jogador.width) < DISPLAY_WIDTH))
+                    jogador.x += MOVEMENT_STEP;
             }
+
+            jogador.jump = !colisionDown;
+
+            if(jogador.jump)
+            {
+                jogador.y -= jogador.force;
+                jogador.force -= GRAVITY;
+            }
+
+            if(jogador.force < -100)
+                jogador.force = -10;
+
+            if(jogador.y < 0)
+                jogador.y = 0;
+            if(jogador.x < 0)
+                jogador.x = 0;
+            if((jogador.y + jogador.height) > DISPLAY_HEIGHT)
+                jogador.y = DISPLAY_HEIGHT - jogador.height;
+            if((jogador.x + jogador.width) > DISPLAY_WIDTH)
+                jogador.x = DISPLAY_WIDTH - jogador.width;
+
+
+            colisionLeft = detectColisionLeft_Matriz(jogador, mapa, blocos);
+            colisionRight = detectColisionRight_Matriz(jogador, mapa, blocos);
+            colisionUp = detectColisionUp_Matriz(jogador, mapa, blocos);
+            colisionDown = detectColisionDown_Matriz(jogador, mapa, blocos);
+
+
+            if(colisionUp)
+                jogador.y = (((jogador.y - mapa.y)/blockHeight) * blockHeight) + mapa.y + blockHeight;
+            if(colisionDown)
+                jogador.y -= 1 + ((jogador.y - mapa.y) % blockHeight) - (blockHeight - (jogador.height % blockHeight));
+
+
+            mapa.x += ((DISPLAY_WIDTH/2) - (jogador.width/2)) - jogador.x;
+            mapa.y += ((DISPLAY_HEIGHT/2) - (jogador.height/2)) - jogador.y;
+            jogador.x = ((DISPLAY_WIDTH/2) - (jogador.width/2));
+            jogador.y = ((DISPLAY_HEIGHT/2) - (jogador.height/2));
+
+
+            movement = false;
+            movementBoost = false;
 
             if(keys[P])
                 gameState = 3;
             if(draw)
             {
                 draw = false;
+
                 for(i = 0; i < numLinhas; i++)
                 {
                     for(j = 0; j < numColunas; j++)
@@ -779,6 +767,11 @@ int main()
                 // DRAW BORDERS
                 if(SHOW_BORDER)
                 {
+                    al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 50, 50, 0, "Mapa.y = %d", mapa.y);
+                    al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 50, 75, 0, "Jogador.y = %d", jogador.y);
+                    al_draw_textf(arial_24, al_map_rgb(COR_BORDAS), 50, 100, 0, "Diferenca = %d", ((jogador.y - mapa.y)%blockHeight));
+
+
                     al_draw_rectangle(mapa.x + mouseBlock.coluna * blockWidth, mapa.y + mouseBlock.linha * blockHeight, mapa.x + (mouseBlock.coluna * blockWidth) + blockWidth, mapa.y + (mouseBlock.linha * blockHeight) + blockHeight, al_map_rgb(COR_BORDAS), 1);
                     al_draw_rectangle(1, 1, DISPLAY_WIDTH, DISPLAY_HEIGHT, al_map_rgb(COR_BORDAS), 1);
                     if(SHOW_MAP_LIMITS)
@@ -822,9 +815,9 @@ int main()
             al_start_timer(menuTimer);
     }
 
-    //--------------------------------------------------
-    // Finalização do Allegro
-    //--------------------------------------------------
+//--------------------------------------------------
+// Finalização do Allegro
+//--------------------------------------------------
 
     al_destroy_bitmap(blocoTerra);
     al_destroy_bitmap(blocoGrama);
@@ -1349,133 +1342,34 @@ void saveMap()
 
 int detectColisionLeft_Matriz(struct Objeto character, struct Posicao mapaPos, char blockPos[numLinhas][numColunas])
 {
-    int i, j;
+    int linhaAtual, colunaAtual;
+    struct Posicao blocoAtual = {0, 0, 0};
+    struct Posicao blocoAtual2 = {0, 0, 0};
+    struct Posicao jogador2 = {0, 0, 0};
     bool result = 0;
 
-    for(i = 0; i < numLinhas; i++)
+    jogador2.x = (jogador.x + jogador.width);
+    jogador2.y = (jogador.y + jogador.height);
+
+    for(linhaAtual = 0; linhaAtual < numLinhas; linhaAtual++)
     {
-        for(j = 0; j < numColunas; j++)
-            if(((mapaPos.x + (j * blockWidth) + blockWidth) >= 0)&&((mapaPos.y + (i * blockHeight) + blockHeight)>= 0)&&((mapaPos.x + j * blockWidth) < DISPLAY_WIDTH)&&((mapaPos.y + i * blockHeight) < DISPLAY_HEIGHT))
+        blocoAtual.y = mapa.y + (blockHeight * linhaAtual);
+        blocoAtual2.y = blocoAtual.y + blockHeight - 1;
+
+        for(colunaAtual = 0; colunaAtual < numColunas; colunaAtual++)
+        {
+            blocoAtual.x = mapa.x + (blockWidth * colunaAtual);
+            blocoAtual2.x = blocoAtual.x + blockWidth - 1;
+
+            if((blocoAtual.x > 0) && (blocoAtual.y > 0) && ((blocoAtual.x + blockWidth) < DISPLAY_WIDTH) && ((blocoAtual.y + blockHeight) < DISPLAY_HEIGHT))
             {
-                if((character.x == (mapaPos.x + ((1 + j) * blockWidth) + 1))
-                        && ((((character.y) >= (mapaPos.y + (i * blockHeight)))&& ((character.y) <= (mapaPos.y + ((i + 1) * blockHeight))))
-                            || ((character.y + character.height) >= (mapaPos.y + (i * blockHeight)) && ((character.y + character.height) <= (mapaPos.y + ((i + 1) * blockHeight))))
-                            || ((character.y < (mapaPos.y + (i * blockHeight))) && ((character.y + character.height) > (mapaPos.y + ((i + 1) * blockHeight))))))
-
+                if((jogador2.x >= blocoAtual.x) && (jogador.x <= (blocoAtual2.x + 1)))
                 {
-                    switch(blocos[i][j])
+                    if(((jogador.y >= blocoAtual.y) && (jogador.y <= blocoAtual2.y))
+                            || ((jogador2.y >= blocoAtual.y) && (jogador2.y <= blocoAtual2.y))
+                            || ((jogador.y <= blocoAtual.y) && (jogador2.y >= blocoAtual2.y)))
                     {
-                    case 0: // AR
-                        result |= 0;
-                        break;
-                    case 1: // TERRA
-                    case 2: // PEDRA
-                    case 3: // SILICIO
-                        result |= 1;
-                        break;
-                    case 4: // LAVA
-                    case 5: // AGUA
-                        result |= 0;
-                        break;
-                    }
-                }
-            }
-    }
-    return result;
-}
-
-int detectColisionRight_Matriz(struct Objeto character, struct Posicao mapaPos, char blockPos[numLinhas][numColunas])
-{
-    int i, j;
-    bool result = 0;
-
-    for(i = 0; i < numLinhas; i++)
-    {
-        for(j = 0; j < numColunas; j++)
-            if(((mapaPos.x + (j * blockWidth) + blockWidth) >= 0)&&((mapaPos.y + (i * blockHeight) + blockHeight)>= 0)&&((mapaPos.x + j * blockWidth) < DISPLAY_WIDTH)&&((mapaPos.y + i * blockHeight) < DISPLAY_HEIGHT))
-            {
-                if(((character.x + character.width) == (mapaPos.x + (j * blockWidth) - 1))
-                        && ((((character.y) >= (mapaPos.y + (i * blockHeight)))&& ((character.y) <= (mapaPos.y + ((i + 1) * blockHeight))))
-                            || ((character.y + character.height) >= (mapaPos.y + (i * blockHeight)) && ((character.y + character.height) <= (mapaPos.y + ((i + 1) * blockHeight))))
-                            || ((character.y < (mapaPos.y + (i * blockHeight))) && ((character.y + character.height) > (mapaPos.y + ((i + 1) * blockHeight))))))
-
-                {
-                    switch(blocos[i][j])
-                    {
-                    case 0: // AR
-                        result |= 0;
-                        break;
-                    case 1: // TERRA
-                    case 2: // PEDRA
-                    case 3: // SILICIO
-                        result |= 1;
-                        break;
-                    case 4: // LAVA
-                    case 5: // AGUA
-                        result |= 0;
-                        break;
-                    }
-                }
-            }
-    }
-    return result;
-}
-
-int detectColisionUp_Matriz(struct Objeto character, struct Posicao mapaPos, char blockPos[numLinhas][numColunas])
-{
-    int i, j;
-    bool result = 0;
-
-    for(i = 0; i < numLinhas; i++)
-    {
-        for(j = 0; j < numColunas; j++)
-            if(((mapaPos.x + (j * blockWidth) + blockWidth) >= 0)&&((mapaPos.y + (i * blockHeight) + blockHeight)>= 0)&&((mapaPos.x + j * blockWidth) < DISPLAY_WIDTH)&&((mapaPos.y + i * blockHeight) < DISPLAY_HEIGHT))
-            {
-                if((character.y == (mapaPos.y + ((i + 1) * blockHeight) + 1))
-                        && ((((character.x) >= (mapaPos.x + (j * blockWidth)))&& ((character.x) <= (mapaPos.x + ((j + 1) * blockWidth))))
-                            || ((character.x + character.width) >= (mapaPos.x + (j * blockWidth)) && ((character.x + character.width) <= (mapaPos.x + ((j + 1) * blockWidth))))
-                            || ((character.x < (mapaPos.x + (j * blockWidth))) && ((character.x + character.width) > (mapaPos.x + ((j + 1) * blockWidth))))))
-
-                {
-                    switch(blocos[i][j])
-                    {
-                    case 0: // AR
-                        result |= 0;
-                        break;
-                    case 1: // TERRA
-                    case 2: // PEDRA
-                    case 3: // SILICIO
-                        result |= 1;
-                        break;
-                    case 4: // LAVA
-                    case 5: // AGUA
-                        result |= 0;
-                        break;
-                    }
-                }
-            }
-    }
-    return result;
-}
-
-int detectColisionDown_Matriz(struct Objeto character, struct Posicao mapaPos, char blockPos[numLinhas][numColunas])
-{
-    int i, j;
-    bool result = 0;
-
-    for(i = 0; i < numLinhas; i++)
-    {
-        for(j = 0; j < numColunas; j++)
-            if(((mapaPos.x + (j * blockWidth) + blockWidth) >= 0)&& ((mapaPos.y + (i * blockHeight) + blockHeight)>= 0) && ((mapaPos.x + j * blockWidth) < DISPLAY_WIDTH) &&((mapaPos.y + i * blockHeight) < DISPLAY_HEIGHT))
-            {
-                if(((character.y + character.height) >= (mapaPos.y + (i * blockHeight))) && ((character.y + character.height) <= (mapaPos.y + ((i + 1) * blockHeight))))
-                {
-                    if((((character.x) >= (mapaPos.x + (j * blockWidth)))&& ((character.x) <= (mapaPos.x + ((j + 1) * blockWidth))))
-                            || ((character.x + character.width) >= (mapaPos.x + (j * blockWidth)) && ((character.x + character.width) <= (mapaPos.x + ((j + 1) * blockWidth))))
-                            || ((character.x < (mapaPos.x + (j * blockWidth))) && ((character.x + character.width) > (mapaPos.x + ((j + 1) * blockWidth)))))
-
-                    {
-                        switch(blocos[i][j])
+                        switch(blocos[linhaAtual][colunaAtual])
                         {
                         case 0: // AR
                             result |= 0;
@@ -1493,9 +1387,179 @@ int detectColisionDown_Matriz(struct Objeto character, struct Posicao mapaPos, c
                     }
                 }
             }
+        }
     }
-    if((character.y + character.height) >= (mapa.y + (numColunas * blockHeight) - 1))
-        result |= 1;
+
+    if(jogador2.y >= DISPLAY_HEIGHT)
+        result = 1;
+
+    return result;
+}
+
+int detectColisionRight_Matriz(struct Objeto character, struct Posicao mapaPos, char blockPos[numLinhas][numColunas])
+{
+    int linhaAtual, colunaAtual;
+    struct Posicao blocoAtual = {0, 0, 0};
+    struct Posicao blocoAtual2 = {0, 0, 0};
+    struct Posicao jogador2 = {0, 0, 0};
+    bool result = 0;
+
+    jogador2.x = (jogador.x + jogador.width);
+    jogador2.y = (jogador.y + jogador.height);
+
+    for(linhaAtual = 0; linhaAtual < numLinhas; linhaAtual++)
+    {
+        blocoAtual.y = mapa.y + (blockHeight * linhaAtual);
+        blocoAtual2.y = blocoAtual.y + blockHeight - 1;
+
+        for(colunaAtual = 0; colunaAtual < numColunas; colunaAtual++)
+        {
+            blocoAtual.x = mapa.x + (blockWidth * colunaAtual);
+            blocoAtual2.x = blocoAtual.x + blockWidth - 1;
+
+            if((blocoAtual.x > 0) && (blocoAtual.y > 0) && ((blocoAtual.x + blockWidth) < DISPLAY_WIDTH) && ((blocoAtual.y + blockHeight) < DISPLAY_HEIGHT))
+            {
+                if((jogador2.x >= (blocoAtual.x - 1)) && (jogador2.x <= blocoAtual2.x))
+                {
+                    if(((jogador.y >= blocoAtual.y) && (jogador.y <= blocoAtual2.y))
+                            || ((jogador2.y >= blocoAtual.y) && (jogador2.y <= blocoAtual2.y))
+                            || ((jogador.y <= blocoAtual.y) && (jogador2.y >= blocoAtual2.y)))
+                    {
+                        switch(blocos[linhaAtual][colunaAtual])
+                        {
+                        case 0: // AR
+                            result |= 0;
+                            break;
+                        case 1: // TERRA
+                        case 2: // PEDRA
+                        case 3: // SILICIO
+                            result |= 1;
+                            break;
+                        case 4: // LAVA
+                        case 5: // AGUA
+                            result |= 0;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if(jogador2.y >= DISPLAY_HEIGHT)
+        result = 1;
+
+    return result;
+}
+
+int detectColisionUp_Matriz(struct Objeto character, struct Posicao mapaPos, char blockPos[numLinhas][numColunas])
+{
+    int linhaAtual, colunaAtual;
+    struct Posicao blocoAtual = {0, 0, 0};
+    struct Posicao blocoAtual2 = {0, 0, 0};
+    struct Posicao jogador2 = {0, 0, 0};
+    bool result = 0;
+
+    jogador2.x = (jogador.x + jogador.width);
+    jogador2.y = (jogador.y + jogador.height);
+
+    for(linhaAtual = 0; linhaAtual < numLinhas; linhaAtual++)
+    {
+        blocoAtual.y = mapa.y + (blockHeight * linhaAtual);
+        blocoAtual2.y = blocoAtual.y + blockHeight - 1;
+
+        for(colunaAtual = 0; colunaAtual < numColunas; colunaAtual++)
+        {
+            blocoAtual.x = mapa.x + (blockWidth * colunaAtual);
+            blocoAtual2.x = blocoAtual.x + blockWidth - 1;
+
+            if((blocoAtual.x > 0) && (blocoAtual.y > 0) && ((blocoAtual.x + blockWidth) < DISPLAY_WIDTH) && ((blocoAtual.y + blockHeight) < DISPLAY_HEIGHT))
+            {
+                if((jogador.y <= blocoAtual2.y ) && (jogador.y >= blocoAtual.y))
+                {
+                    if(((jogador.x >= blocoAtual.x) && (jogador.x <= blocoAtual2.x))
+                            || ((jogador2.x >= blocoAtual.x) && (jogador2.x <= blocoAtual2.x))
+                            || ((jogador.x <= blocoAtual.x) && (jogador2.x >= blocoAtual2.x)))
+                    {
+                        switch(blocos[linhaAtual][colunaAtual])
+                        {
+                        case 0: // AR
+                            result |= 0;
+                            break;
+                        case 1: // TERRA
+                        case 2: // PEDRA
+                        case 3: // SILICIO
+                            result |= 1;
+                            break;
+                        case 4: // LAVA
+                        case 5: // AGUA
+                            result |= 0;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if(jogador.y <= 0)
+        result = 1;
+
+    return result;
+}
+
+int detectColisionDown_Matriz(struct Objeto character, struct Posicao mapaPos, char blockPos[numLinhas][numColunas])
+{
+    int linhaAtual, colunaAtual;
+    struct Posicao blocoAtual = {0, 0, 0};
+    struct Posicao blocoAtual2 = {0, 0, 0};
+    struct Posicao jogador2 = {0, 0, 0};
+    bool result = 0;
+
+    jogador2.x = (jogador.x + jogador.width);
+    jogador2.y = (jogador.y + jogador.height);
+
+    for(linhaAtual = 0; linhaAtual < numLinhas; linhaAtual++)
+    {
+        blocoAtual.y = mapa.y + (blockHeight * linhaAtual);
+        blocoAtual2.y = blocoAtual.y + blockHeight - 1;
+
+        for(colunaAtual = 0; colunaAtual < numColunas; colunaAtual++)
+        {
+            blocoAtual.x = mapa.x + (blockWidth * colunaAtual);
+            blocoAtual2.x = blocoAtual.x + blockWidth - 1;
+
+            if((blocoAtual.x > 0) && (blocoAtual.y > 0) && ((blocoAtual.x + blockWidth) < DISPLAY_WIDTH) && ((blocoAtual.y + blockHeight) < DISPLAY_HEIGHT))
+            {
+                if((jogador2.y >= blocoAtual.y) && (jogador2.y <= blocoAtual2.y))
+                {
+                    if(((jogador.x >= blocoAtual.x) && (jogador.x <= blocoAtual2.x))
+                            || ((jogador2.x >= blocoAtual.x) && (jogador2.x <= blocoAtual2.x))
+                            || ((jogador.x <= blocoAtual.x) && (jogador2.x >= blocoAtual2.x)))
+                    {
+                        switch(blocos[linhaAtual][colunaAtual])
+                        {
+                        case 0: // AR
+                            result |= 0;
+                            break;
+                        case 1: // TERRA
+                        case 2: // PEDRA
+                        case 3: // SILICIO
+                            result |= 1;
+                            break;
+                        case 4: // LAVA
+                        case 5: // AGUA
+                            result |= 0;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if(jogador2.y >= DISPLAY_HEIGHT)
+        result = 1;
 
     return result;
 }
